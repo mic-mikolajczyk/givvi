@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.6-bookworm
+        env:
+          POSTGRES_USER: givvi
+          POSTGRES_DB: givvi_test
+          POSTGRES_PASSWORD: test-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U givvi -d givvi_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      GIVVI_DATABASE_URL: postgresql+psycopg://givvi:test-only-password@127.0.0.1:5432/givvi_test
+      GIVVI_TEST_DATABASE_URL: postgresql+psycopg://givvi:test-only-password@127.0.0.1:5432/givvi_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install backend dependencies
+        run: python -m venv .venv && .venv/bin/python -m pip install -r requirements-dev.txt
+      - name: Check Python style
+        run: .venv/bin/python -m flake8 givvi tests && .venv/bin/python -m isort --check-only givvi tests
+      - name: Run backend tests
+        run: .venv/bin/python -m pytest -q && .venv/bin/python -m pytest -m integration -q
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
+      - name: Check frontend
+        run: npm --prefix frontend run lint && npm --prefix frontend test && npm --prefix frontend run build
+      - name: Install browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Run browser tests
+        run: npm --prefix frontend run test:e2e
+      - name: Upload browser artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-failure-artifacts
+          path: frontend/test-results/
+          retention-days: 7

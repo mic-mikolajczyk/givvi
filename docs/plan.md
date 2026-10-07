@@ -4,7 +4,7 @@
 
 Deliver the v1 requirements in [spec.md](spec.md) through small, demonstrable increments. [adr.md](adr.md) records the proposed implementation decisions, alternatives, patterns, and operational strategies. The spec governs product scope; an ADR does not override it.
 
-This is a backlog, not a fixed-date schedule. Phase order expresses dependencies, not sprint duration. Implementation has not started; all tasks are initially incomplete.
+This is a backlog, not a fixed-date schedule. Phase order expresses dependencies, not sprint duration. Phase 0 implementation is complete and awaiting user review. Later phases require user verification of the preceding phase before work begins.
 
 ## Implementation Principles
 
@@ -49,25 +49,36 @@ This is a backlog, not a fixed-date schedule. Phase order expresses dependencies
 
 ### Step 0.1: Close specification edge cases
 
-- [ ] P0.1a: Confirm what an invite holder may see before claiming. Recommend a minimal claim screen containing roster names and availability, but no wishlists, private event details, or assignments.
-- [ ] P0.1b: Confirm deletion eligibility after drawing has been enabled and subsequently reset. Recommend tracking whether drawing has ever been enabled and preventing permanent deletion thereafter.
-- [ ] P0.1c: Confirm account deletion for the sole admin and for active exchanges. Recommend requiring admin transfer or cancellation before admin deletion; preserve participant references as tombstones without reassigning recipients.
-- [ ] P0.1d: Clarify that archiving freezes event operations, not the user's global wishlist; decide whether already revealed recipients remain readable in archived/cancelled events. Recommend retaining previously revealed access without allowing new reveals.
-- [ ] P0.1e: Define supported gift currencies, price precision/ranges, input size limits, invite lifetime, and session/token lifetimes. Recommend EUR/PLN for gift prices, nonnegative decimal values, and bounded configurable limits.
-- [ ] P0.1f: Confirm whether deleting a profile also requires anonymizing historical roster names, and document retention and backup deletion expectations. Do not label retained personal names as anonymous.
+- [x] P0.1a: Confirm what an invite holder may see before claiming. Recommend a minimal claim screen containing roster names and availability, but no wishlists, private event details, or assignments.
+- [x] P0.1b: Confirm deletion eligibility after drawing has been enabled and subsequently reset. Recommend tracking whether drawing has ever been enabled and preventing permanent deletion thereafter.
+- [x] P0.1c: Confirm account deletion for the sole admin and for active exchanges. Recommend requiring admin transfer or cancellation before admin deletion; preserve participant references as tombstones without reassigning recipients.
+- [x] P0.1d: Clarify that archiving freezes event operations, not the user's global wishlist; decide whether already revealed recipients remain readable in archived/cancelled events. Recommend retaining previously revealed access without allowing new reveals.
+- [x] P0.1e: Define supported gift currencies, price precision/ranges, input size limits, invite lifetime, and session/token lifetimes. Recommend EUR/PLN for gift prices, nonnegative decimal values, and bounded configurable limits.
+- [x] P0.1f: Confirm whether deleting a profile also requires anonymizing historical roster names, and document retention and backup deletion expectations. Do not label retained personal names as anonymous.
 
 **Acceptance:** Decisions are recorded in the spec or an approved clarification; dependent tasks do not silently pick conflicting behavior.
 
+The user approved all six clarifications; exact limits and retention rules are recorded in spec section 14. Approval of these contracts does not mean their later-phase functionality is already implemented.
+
 ### Step 0.2: Establish development and CI
 
-- [ ] P0.2a: Create the `givvi` Python package, Flask application factory, environment configuration, `.venv` instructions, and fixed-version dependency files.
-- [ ] P0.2b: Initialize Vue with TypeScript, Vite, Router, Tailwind, and internationalization. Pin dependencies with a lockfile.
-- [ ] P0.2c: Add local Docker services for PostgreSQL and a development email inbox; provide placeholder configuration without credentials.
-- [ ] P0.2d: Add pytest fixtures under root `tests/`, frontend component tests, and Playwright browser tests.
-- [ ] P0.2e: Add CI for flake8, GOOGLE-profile isort, frontend checks, builds, and PostgreSQL integration tests. Add migration smoke tests as migrations appear.
-- [ ] P0.2f: Demonstrate a frontend request to a minimal backend readiness endpoint.
+- [x] P0.2a: Create the `givvi` Python package, Flask application factory, environment configuration, `.venv` instructions, and fixed-version dependency files.
+- [x] P0.2b: Initialize Vue with TypeScript, Vite, Router, Tailwind, and internationalization. Pin dependencies with a lockfile.
+- [x] P0.2c: Add local Docker services for PostgreSQL and a development email inbox; provide placeholder configuration without credentials.
+- [x] P0.2d: Add pytest fixtures under root `tests/`, frontend component tests, and Playwright browser tests.
+- [x] P0.2e: Add CI for flake8, GOOGLE-profile isort, frontend checks, builds, and PostgreSQL integration tests. Add migration smoke tests as migrations appear.
+- [x] P0.2f: Demonstrate a frontend request to a minimal backend readiness endpoint.
 
 **Acceptance:** A documented clean checkout can run locally and CI validates the skeleton. Dependencies: P0.1 only where contracts affect scaffolding.
+
+### Phase 0 Verification Checkpoint
+
+Local checks passed on 2026-10-07: six backend unit tests, one real PostgreSQL integration test, five Vue component tests, and four desktop/mobile Playwright checks using the version-matched Docker browser runtime. Python lint/import checks, frontend lint/type/build checks, and documentation whitespace checks passed. Desktop/mobile screenshots were inspected.
+
+The CI workflow is configured; a hosted GitHub Actions run has not been executed in this session. Migration checks will be added when Phase 1 introduces migrations. The app currently contains only a service-status screen, not accounts or event functionality.
+
+- [ ] User verifies Phase 0 using the [README review steps](../README.md#phase-0-review).
+- [ ] User authorizes beginning Phase 1.
 
 ## Phase 1: Accounts and Localized App Shell
 

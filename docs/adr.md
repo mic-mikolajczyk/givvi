@@ -2,7 +2,7 @@
 
 ## Status and Scope
 
-These records describe the **proposed implementation**, not existing code. The product authority is [spec.md](spec.md); delivery tasks are in [plan.md](plan.md). Technical choices below are planning defaults, subject to validation during implementation. Unresolved product rules remain explicit in plan step 0.1.
+These records describe the **target implementation**, not a claim that every strategy exists in code. The product authority is [spec.md](spec.md); delivery tasks are in [plan.md](plan.md). Phase 0 implements the application factory, configuration, database connectivity, frontend routing/localization, and test infrastructure. Remaining records are planning defaults until their delivery phase. Phase 0 product clarifications are approved and recorded in spec section 14.
 
 Each record states context, decision/pattern, rationale and alternatives, implementation, and verification. Update or supersede a record when evidence changes; do not silently introduce another strategy.
 
@@ -201,3 +201,17 @@ Log request ID, route template, status, duration, operation, and opaque identifi
 **Implementation:** Do not add reservation status, conversion, exclusions, notification center, or payment schemas/UI for v1. Existing module boundaries allow later extension without predicting its full design. Any future feature needs an approved spec change, dedicated acceptance criteria, and a new or superseding ADR.
 
 **Verification:** Release review checks both included requirements and absence of deferred behavior. Update this record only when scope is deliberately revised.
+
+## ADR-017: Phase 0 Foundation and Verification Checkpoint
+
+**Status:** Implemented foundation; user review is required before Phase 1.
+
+**Context:** The repository initially contained planning documents only. The first increment must prove the development toolchain and frontend-to-database path without pretending account or event features exist.
+
+**Decision/strategy:** Expose separate `/api/health/live` and `/api/health/ready` endpoints. Readiness executes a database query and returns only `ready` or `unavailable`; liveness does not require PostgreSQL. Serve a minimal bilingual status view through Vite's same-origin development API proxy.
+
+**Implementation:** Each Flask factory call creates an independent SQLAlchemy engine. Missing database configuration fails at startup; PostgreSQL connections use a three-second connection timeout. Readiness failure logs a constant warning without connection details, returns 503, and disables caching. The Vue view has loading, success, unavailable, and retry states, a bounded cancellable request, and English/Polish text. Use the maintained `@lucide/vue` package rather than its deprecated predecessor. Local PostgreSQL and Mailpit bind only to loopback with persistent database storage; example passwords are placeholders, never production credentials.
+
+**Rationale/alternatives:** A process-only readiness check would hide database outages. A mock database cannot validate the integration path. Production WSGI, structured application errors/logging, authentication, migrations, and email delivery remain in their planned phases; the local Flask server is development-only.
+
+**Verification:** Backend tests begin with a missing-package failure; component tests begin with missing-view/translation failures. PostgreSQL integration tests explicitly fail without their configured database, rather than silently skipping. Browser tests exercise actual readiness and error recovery on desktop/mobile. CI installs browser dependencies; hosts without those libraries can use the version-matched Playwright Docker image. Migration checks begin when Phase 1 introduces migrations.

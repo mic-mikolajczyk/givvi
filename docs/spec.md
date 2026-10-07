@@ -178,3 +178,18 @@ An account may claim at most one roster entry in an event, and a roster entry ma
 - Archived and cancelled events are read-only; past status alone does not make an event read-only.
 - English and Polish are available in the application and transactional email, with English as the fallback.
 - Core flows work in supported mobile and desktop browsers.
+
+## 14. Approved Phase 0 Clarifications
+
+The following defaults were approved before implementation. They refine the requirements above and are acceptance criteria for the relevant delivery phases.
+
+- Before claiming an entry, a signed-in invite holder can see only roster names and entry availability. Private event details, wishlists, and assignments remain inaccessible until membership is established.
+- Permanent event deletion is allowed only if drawing has never been enabled. Resetting does not restore deletion eligibility.
+- The organizer is not automatically a participant and must claim a roster entry to join the exchange.
+- Deleting an account requires transferring its admin ownership or cancelling affected events first. Existing assignments retain anonymized participant references and are never reassigned as a side effect of deletion.
+- Archiving freezes event operations, not users' global wishlists. Previously revealed recipients remain readable in archived and cancelled events, but new reveals are blocked. Unarchiving restores event operations only when the event is not cancelled.
+- Gift prices support EUR and PLN. A known price requires an explicit currency. Gift prices and event budgets use two decimal places and must be between 0 and 999,999.99 inclusive.
+- Initial configurable limits are 100 roster entries per event, 200 gifts per wishlist, 120 characters per name, 2,000 characters per description, and 2,048 characters per URL. These are server-side limits, not just form constraints.
+- Sessions expire after seven days, verification tokens after 24 hours, and password-reset tokens after 30 minutes. Verification/reset tokens are single-use. Invite links remain valid until revoked or regenerated, subject to event-state restrictions.
+- Account deletion removes personal profile/wishlist data and anonymizes historical roster names associated with the account. Retained identity labels become a neutral deleted-user label.
+- Backups expire within 30 days. Deletion records are reapplied when restoring backups before reopening access; immediate physical erasure from existing backups is not promised.
