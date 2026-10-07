@@ -53,17 +53,21 @@ def csrf() -> Response:
 
 @accounts.post("/register")
 def registration() -> tuple[Response, int]:
-    with Session(current_app.extensions["database"]) as database, database.begin():
-        require_csrf(database)
-        body = request_body()
-        throttle("register", normalized_email(body.get("email")))
-        try:
-            with database.begin_nested():
-                services.register(database, body)
-        except IntegrityError:
-            if not database.scalar(select(User).where(User.email == normalized_email(body.get("email")))):
+    engine = current_app.extensions["database"]
+    try:
+        with Session(engine) as database, database.begin():
+            require_csrf(database)
+            body = request_body()
+            email = normalized_email(body.get("email"))
+            throttle("register", email)
+            user = services.register(database, body)
+            response = signed_in_response(database, user)
+    except IntegrityError:
+        with Session(engine) as database:
+            if not database.scalar(select(User).where(User.email == email)):
                 raise
-    return jsonify(code="check_email"), 202
+        raise ApiError("registration_failed", 409)
+    return response, 201
 
 
 def mutation(function: Callable) -> Callable:
@@ -73,7 +77,7 @@ def mutation(function: Callable) -> Callable:
             require_csrf(database)
             body = request_body()
             email = body.get("email", "")
-            throttle(function.__name__, email.casefold()[:254] if isinstance(email, str) else "")
+            throttle(function.__name__, normalized_email(email) if email else "")
             return function(database, body)
     return wrapped
 
@@ -85,24 +89,7 @@ def user_view(user: User) -> dict:
     }
 
 
-@accounts.post("/verify")
-@mutation
-def verify(database: Session, body: dict) -> Response:
-    services.verify_token(database, body.get("token"))
-    return jsonify(code="email_verified")
-
-
-@accounts.post("/resend-verification")
-@mutation
-def resend_verification(database: Session, body: dict) -> tuple[Response, int]:
-    services.request_email(database, body, "verify")
-    return jsonify(code="check_email"), 202
-
-
-@accounts.post("/login")
-@mutation
-def login(database: Session, body: dict) -> Response:
-    user = services.authenticate(database, body)
+def signed_in_response(database: Session, user: User) -> Response:
     record = session_record(database)
     if record:
         database.delete(record)
@@ -110,6 +97,20 @@ def login(database: Session, body: dict) -> Response:
     response = jsonify(user=user_view(user), csrf_token=token)
     set_cookie(response, identifier, True)
     return response
+
+
+@accounts.post("/verify")
+@mutation
+def verify(database: Session, body: dict) -> Response:
+    services.verify_token(database, body.get("token"))
+    return jsonify(code="email_verified")
+
+
+@accounts.post("/login")
+@mutation
+def login(database: Session, body: dict) -> Response:
+    user = services.authenticate(database, body)
+    return signed_in_response(database, user)
 
 
 @accounts.get("/me")
@@ -132,7 +133,7 @@ def logout(database: Session, body: dict) -> Response:
 @accounts.post("/forgot-password")
 @mutation
 def forgot_password(database: Session, body: dict) -> tuple[Response, int]:
-    services.request_email(database, body, "reset")
+    services.request_password_reset(database, body)
     return jsonify(code="check_email"), 202
 
 

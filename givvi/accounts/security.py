@@ -61,8 +61,6 @@ def require_user(database: Session) -> User:
         user = None
     if not user:
         raise ApiError("unauthenticated", 401)
-    if not user.verified_at:
-        raise ApiError("email_unverified", 403)
     return user
 
 

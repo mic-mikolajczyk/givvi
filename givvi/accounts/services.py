@@ -61,8 +61,8 @@ def token_email(
     database.add(AccountToken(id=digest(token), user_id=user.id,
                  purpose=purpose, target_email=target_email, expires_at=expires))
     translations = {
-        "en": {"verify": "Verify your email", "reset": "Reset your password", "email": "Confirm your new email"},
-        "pl": {"verify": "Potwierdź adres email", "reset": "Zresetuj hasło", "email": "Potwierdź nowy adres email"},
+        "en": {"reset": "Reset your password", "email": "Confirm your new email"},
+        "pl": {"reset": "Zresetuj hasło", "email": "Potwierdź nowy adres email"},
     }
     title = translations.get(user.language, translations["en"])[purpose]
     path = "reset-password" if purpose == "reset" else "verify"
@@ -73,7 +73,7 @@ def token_email(
     database.add(EmailMessage(user_id=user.id, payload=encrypted, available_at=now(), expires_at=expires))
 
 
-def register(database: Session, body: dict) -> None:
+def register(database: Session, body: dict) -> User:
     email = normalized_email(body.get("email"))
     name = validate_name(body.get("name"))
     password = validate_password(body.get("password"))
@@ -82,12 +82,12 @@ def register(database: Session, body: dict) -> None:
         raise ApiError("validation_error", 422, {"language": "invalid_language"})
     password_hash = PasswordHasher().hash(password)
     if database.scalar(select(User).where(User.email == email)):
-        return
+        raise ApiError("registration_failed", 409)
     user = User(email=email, name=name, password_hash=password_hash, language=language)
     database.add(user)
     database.flush()
     database.add(Wishlist(user_id=user.id))
-    token_email(database, user, "verify")
+    return user
 
 
 def password_matches(user: User | None, password: object) -> bool:
@@ -106,8 +106,6 @@ def authenticate(database: Session, body: dict) -> User:
     user = database.scalar(select(User).where(User.email == email).with_for_update())
     if not password_matches(user, body.get("password")):
         raise ApiError("invalid_credentials", 401)
-    if not user.verified_at:
-        raise ApiError("email_unverified", 403)
     if PasswordHasher().check_needs_rehash(user.password_hash):
         user.password_hash = PasswordHasher().hash(body["password"])
     return user
@@ -129,19 +127,13 @@ def token_owner(database: Session, raw_token: object) -> tuple[User, AccountToke
 
 def verify_token(database: Session, raw_token: object) -> None:
     user, token = token_owner(database, raw_token)
-    if token.purpose not in ("verify", "email"):
+    if token.purpose != "email" or token.target_email != user.pending_email:
         raise ApiError("token_invalid", 400)
-    if token.purpose == "email":
-        if token.target_email != user.pending_email:
-            raise ApiError("token_invalid", 400)
-        if database.scalar(select(User).where(User.email == token.target_email, User.id != user.id)):
-            raise ApiError("email_unavailable", 409)
-        user.email = token.target_email
-        user.pending_email = None
-        revoke_credentials(database, user.id)
-    else:
-        user.verified_at = now()
-        database.delete(token)
+    if database.scalar(select(User).where(User.email == token.target_email, User.id != user.id)):
+        raise ApiError("email_unavailable", 409)
+    user.email = token.target_email
+    user.pending_email = None
+    revoke_credentials(database, user.id)
 
 
 def revoke_credentials(database: Session, user_id: str) -> None:
@@ -150,11 +142,11 @@ def revoke_credentials(database: Session, user_id: str) -> None:
     database.execute(update(User).where(User.id == user_id).values(pending_email=None))
 
 
-def request_email(database: Session, body: dict, purpose: str) -> None:
+def request_password_reset(database: Session, body: dict) -> None:
     email = normalized_email(body.get("email"))
     user = database.scalar(select(User).where(User.email == email).with_for_update())
-    if user and ((purpose == "verify" and not user.verified_at) or (purpose == "reset" and user.verified_at)):
-        token_email(database, user, purpose)
+    if user:
+        token_email(database, user, "reset")
 
 
 def reset_password(database: Session, body: dict) -> None:

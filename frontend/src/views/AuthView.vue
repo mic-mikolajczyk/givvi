@@ -32,16 +32,15 @@ watch(() => route.name, () => {
   password.value = ''
 }, { immediate: true })
 
-async function submit(resend = false) {
+async function submit() {
   busy.value = true
   error.value = ''
   fields.value = {}
   try {
-    const endpoint = resend ? 'resend-verification' : mode.value
-    const result = await request<{ code?: string; user?: User }>(`/auth/${endpoint}`, {
+    const result = await request<{ code?: string; user?: User }>(`/auth/${mode.value}`, {
       name: name.value, email: email.value, password: password.value, language: locale.value, token: token.value,
     })
-    if (mode.value === 'login' && !resend && result.user) {
+    if (['login', 'register'].includes(mode.value) && result.user) {
       currentUser.value = result.user
       locale.value = result.user.language
       await router.replace(next.value)
@@ -150,15 +149,6 @@ async function submit(resend = false) {
           />
         </button>
       </form>
-      <button
-        v-if="error === 'email_unverified'"
-        class="text-button"
-        type="button"
-        :disabled="busy"
-        @click="submit(true)"
-      >
-        {{ t('resend') }}
-      </button>
       <div class="auth-links">
         <RouterLink
           v-if="mode !== 'login'"

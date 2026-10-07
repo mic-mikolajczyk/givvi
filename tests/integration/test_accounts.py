@@ -13,9 +13,9 @@ from sqlalchemy import create_engine
 from sqlalchemy import inspect
 from sqlalchemy import select
 from sqlalchemy.engine import make_url
+from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateSchema
 from sqlalchemy.schema import DropSchema
-from sqlalchemy.orm import Session
 
 from givvi import create_app
 from givvi.accounts.security import digest
@@ -62,7 +62,8 @@ def test_migration_upgrade_downgrade_and_registration(migrated_app) -> None:
         "name": "Alice", "email": "alice@example.com", "password": "correct horse battery staple",
     }, headers={"X-CSRF-Token": token, "Origin": app.config["APP_ORIGIN"]})
 
-    assert response.status_code == 202
+    assert response.status_code == 201
+    assert client.get("/api/auth/me").status_code == 200
     with app.extensions["database"].begin() as connection:
         config.attributes["connection"] = connection
         command.check(config)
@@ -88,7 +89,7 @@ def test_competing_registrations_create_only_one_account(migrated_app) -> None:
     with ThreadPoolExecutor(max_workers=2) as executor:
         statuses = list(executor.map(register_once, range(2)))
 
-    assert statuses == [202, 202]
+    assert sorted(statuses) == [201, 409]
     with Session(app.extensions["database"]) as database:
         assert len(database.scalars(select(User)).all()) == 1
         assert len(database.scalars(select(Wishlist)).all()) == 1
@@ -99,11 +100,12 @@ def test_competing_resets_consume_token_once(migrated_app) -> None:
     app, config = migrated_app
     raw_token = "a-test-only-reset-token"
     with app.app_context(), Session(app.extensions["database"]) as database, database.begin():
-        user = User(name="Alice", email="alice@example.com", password_hash=PasswordHasher().hash("original test password"), verified_at=now())
+        user = User(name="Alice", email="alice@example.com", password_hash=PasswordHasher().hash("original test password"))
         database.add(user)
         database.flush()
         database.add(Wishlist(user_id=user.id))
-        database.add(AccountToken(id=digest(raw_token), user_id=user.id, purpose="reset", expires_at=now() + timedelta(minutes=30)))
+        database.add(AccountToken(id=digest(raw_token), user_id=user.id,
+                     purpose="reset", expires_at=now() + timedelta(minutes=30)))
     barrier = Barrier(2)
 
     def reset_once(unused_index: int) -> int:
@@ -120,3 +122,32 @@ def test_competing_resets_consume_token_once(migrated_app) -> None:
         statuses = list(executor.map(reset_once, range(2)))
 
     assert sorted(statuses) == [200, 400]
+
+
+@pytest.mark.integration
+def test_upgrade_preserves_unverified_account_and_removes_signup_token(migrated_app) -> None:
+    app, config = migrated_app
+    password = "existing account password"
+    with app.app_context(), app.extensions["database"].begin() as connection:
+        config.attributes["connection"] = connection
+        command.downgrade(config, "0001_accounts")
+        connection.execute(User.__table__.insert().values(
+            id="legacy-user", name="Alice", email="legacy@example.com",
+            password_hash=PasswordHasher().hash(password), language="en",
+        ))
+        connection.execute(Wishlist.__table__.insert().values(user_id="legacy-user"))
+        connection.execute(AccountToken.__table__.insert().values(
+            id=digest("legacy-signup-token"), user_id="legacy-user", purpose="verify",
+            expires_at=now() + timedelta(hours=24),
+        ))
+
+        command.upgrade(config, "head")
+
+        assert "verified_at" not in [column["name"] for column in inspect(connection).get_columns("users")]
+        assert connection.execute(select(AccountToken)).all() == []
+    client = app.test_client()
+    csrf = client.get("/api/auth/csrf").json["csrf_token"]
+    response = client.post("/api/auth/login", json={"email": "legacy@example.com", "password": password},
+                           headers={"X-CSRF-Token": csrf, "Origin": app.config["APP_ORIGIN"]})
+    assert response.status_code == 200
+    assert client.get("/api/auth/me").json["user"]["id"] == "legacy-user"

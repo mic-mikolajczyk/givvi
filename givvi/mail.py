@@ -4,6 +4,8 @@ from email.message import EmailMessage as SmtpMessage
 import json
 import smtplib
 import ssl
+from urllib.parse import parse_qs
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 from cryptography.fernet import Fernet
@@ -14,9 +16,12 @@ from sqlalchemy import delete
 from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy import update
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
+from givvi.accounts.security import digest
 from givvi.accounts.security import now
+from givvi.accounts.security import utc
 from givvi.models import AccountToken
 from givvi.models import EmailMessage
 from givvi.models import LoginSession
@@ -26,6 +31,16 @@ MAX_DELIVERY_ATTEMPTS = 5
 LEASE_SECONDS = 60
 SMTP_TIMEOUT_SECONDS = 10
 RETRY_BASE_SECONDS = 30
+
+
+def account_link_is_active(engine: Engine, payload: dict) -> bool:
+    link = urlsplit(payload["body"].splitlines()[-1])
+    if link.path not in ("/verify", "/reset-password"):
+        return True
+    token = parse_qs(link.fragment).get("token", [""])[0]
+    with Session(engine) as database:
+        record = database.get(AccountToken, digest(token))
+        return bool(record and record.purpose in ("reset", "email") and utc(record.expires_at) > now())
 
 
 def send_smtp(payload: dict) -> None:
@@ -73,7 +88,11 @@ def deliver_pending(app: Flask, sender: Callable[[dict], None] | None = None, li
             permanent = False
             try:
                 payload = json.loads(Fernet(app.config["OUTBOX_KEY"].encode()).decrypt(encrypted.encode()))
-                (sender or send_smtp)(payload)
+                if account_link_is_active(engine, payload):
+                    (sender or send_smtp)(payload)
+                else:
+                    app.logger.info("Obsolete account email discarded")
+                    failed = permanent = True
             except (smtplib.SMTPException, OSError, InvalidToken, ValueError, KeyError) as error:
                 app.logger.warning("Email delivery failed", extra={"error_type": type(error).__name__})
                 failed = True

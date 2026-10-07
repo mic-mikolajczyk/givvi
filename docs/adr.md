@@ -2,7 +2,7 @@
 
 ## Status and Scope
 
-These records describe the **target implementation**, not a claim that every strategy exists in code. The product authority is [spec.md](spec.md); delivery tasks are in [plan.md](plan.md). Phase 0 implements the application factory, configuration, database connectivity, frontend routing/localization, and test infrastructure. Remaining records are planning defaults until their delivery phase. Phase 0 product clarifications are approved and recorded in spec section 14.
+These records describe the **target implementation**, not a claim that every strategy exists in code. The product authority is [spec.md](spec.md); delivery tasks are in [plan.md](plan.md). Phase 0 implements the foundation; Phase 1 adds accounts, sessions, profile controls, account-email delivery, migrations, and the localized navigation shell. Later-phase decisions remain planning defaults until their delivery phase. Phase 0 product clarifications are recorded in spec section 14; ADR-018 records the MVP signup change.
 
 Each record states context, decision/pattern, rationale and alternatives, implementation, and verification. Update or supersede a record when evidence changes; do not silently introduce another strategy.
 
@@ -74,9 +74,9 @@ Each record states context, decision/pattern, rationale and alternatives, implem
 
 **Rationale/alternatives:** Server sessions simplify logout/revocation and account deletion. Browser-local JWT storage increases credential exposure and complicates revocation. SameSite cookies are helpful but do not replace CSRF protection.
 
-**Implementation:** Store session/token digests rather than raw secrets, rotate on login, expire sessions, and revoke after reset/deletion. Set Secure, HttpOnly, and SameSite=Lax in production; verify request origin and CSRF token. Use expiring single-use verification/reset tokens and reauthentication for sensitive changes. Verify new email before replacement. Never implement cryptographic primitives or password hashing manually.
+**Implementation:** Store session/token digests rather than raw secrets, rotate on signup/login, expire sessions, and revoke after reset/deletion. Set Secure, HttpOnly, and SameSite=Lax in production; verify request origin and CSRF token. Use expiring single-use email-change/reset tokens and reauthentication for sensitive changes. Verify new email before replacement, but do not require verification of the registration email in the MVP. Never implement cryptographic primitives or password hashing manually.
 
-**Verification:** Cookie settings, session fixation, expiration, reset replay, CSRF, logout, and unverified-user access tests. Protect secret configuration and prevent debug mode in production.
+**Verification:** Immediate signup login, cookie settings, session fixation, expiration, reset replay, CSRF, logout, and unauthenticated-user access tests. Protect secret configuration and prevent debug mode in production.
 
 ## ADR-007: Authorization, Invitations, and Data Minimization
 
@@ -86,7 +86,7 @@ Each record states context, decision/pattern, rationale and alternatives, implem
 
 **Rationale/alternatives:** UI hiding and guess-resistant IDs are not authorization. A broad admin serializer risks accidental assignment disclosure.
 
-**Implementation:** Require verified accounts for protected operations. Allowlist event roster names and reveal status; exclude account names/emails and assignment mapping. Store invitation secret digests and rotate/revoke the capability; do not auto-claim entries from emailed addresses. Keep secrets out of query/access logs and referrers using redaction and Referrer-Policy. Use a dedicated current-user reveal route rather than an arbitrary participant-recipient lookup. Limit invitation attempts and recheck access on every request.
+**Implementation:** Require authenticated accounts for protected operations. Registration email is not proof of address ownership. Allowlist event roster names and reveal status; exclude account names/emails and assignment mapping. Store invitation secret digests and rotate/revoke the capability; do not auto-claim entries from emailed addresses. Keep secrets out of query/access logs and referrers using redaction and Referrer-Policy. Use a dedicated current-user reveal route rather than an arbitrary participant-recipient lookup. Limit invitation attempts and recheck access on every request.
 
 **Verification:** Build a role/action matrix for outsider, invite holder, member, owner, and admin. Test cross-event identifier substitution, revoked links, claim correction, and all response fields. The promise applies to app roles, not unrestricted database operators; document and tightly restrict infrastructure access.
 
@@ -98,13 +98,13 @@ Each record states context, decision/pattern, rationale and alternatives, implem
 
 **Rationale/alternatives:** Client validation improves usability but is bypassable. Server-side link previews would add SSRF risk and are unnecessary in v1.
 
-**Implementation:** Use schema validation, length/range limits, parameterized ORM queries, strict EUR/PLN event currency, and IANA time-zone validation. Permit HTTP/HTTPS gift URLs only; do not fetch external URLs. Use safe external-link attributes, a restrictive CSP, HTTPS/HSTS once HTTPS deployment is verified, and no permissive credentialed CORS. Apply maintained shared-storage rate limiting to login, registration, resets, resend, invitations, and claims; in-memory counters alone are not a production multi-worker guarantee. Use generic auth/recovery messages to reduce enumeration.
+**Implementation:** Use schema validation, length/range limits, parameterized ORM queries, strict EUR/PLN event currency, and IANA time-zone validation. Permit HTTP/HTTPS gift URLs only; do not fetch external URLs. Use safe external-link attributes, a restrictive CSP, HTTPS/HSTS once HTTPS deployment is verified, and no permissive credentialed CORS. Apply shared-storage rate limiting to login, registration, resets, invitations, and claims; Phase 1 uses atomic SQLAlchemy upserts in PostgreSQL. Normalize email counters consistently with credential lookup. In-memory counters alone are not a production multi-worker guarantee. Use generic auth/recovery messages to reduce enumeration.
 
 **Verification:** Invalid payload, XSS, scheme injection, open redirect, rate limit, and oversized request tests; check production headers and proxy trust configuration.
 
 ## ADR-009: Transactional Outbox and Email Adapter
 
-**Context:** Verification, recovery, and invitations must survive email-provider outages without holding database locks.
+**Context:** Email-address changes, recovery, and invitations must survive email-provider outages without holding database locks. Signup must not depend on email delivery.
 
 **Decision/pattern:** Use the transactional outbox pattern and a small email-provider adapter. Store delivery intent with the business transaction; a separate worker sends committed messages.
 
@@ -215,3 +215,17 @@ Log request ID, route template, status, duration, operation, and opaque identifi
 **Rationale/alternatives:** A process-only readiness check would hide database outages. A mock database cannot validate the integration path. Production WSGI, structured application errors/logging, authentication, migrations, and email delivery remain in their planned phases; the local Flask server is development-only.
 
 **Verification:** Backend tests begin with a missing-package failure; component tests begin with missing-view/translation failures. PostgreSQL integration tests explicitly fail without their configured database, rather than silently skipping. Browser tests exercise actual readiness and error recovery on desktop/mobile. CI installs browser dependencies; hosts without those libraries can use the version-matched Playwright Docker image. Migration checks begin when Phase 1 introduces migrations.
+
+## ADR-018: Immediate Signup Login for the MVP
+
+**Status:** Accepted by the user on 2026-10-07; supersedes registration-verification requirements in earlier planning.
+
+**Context:** The MVP should not make users wait for an email or leave the application before their first session.
+
+**Decision:** Create the user, one wishlist, and authenticated session in one transaction. Rotate the anonymous session and CSRF token, return 201, and route directly to the dashboard or a validated internal return destination. Signup creates no email or verification token. Duplicate registration returns a generic 409 failure and never authenticates an existing account.
+
+**Security tradeoff:** Signup no longer proves email ownership. A mistyped or impersonated address can be registered, and successful versus failed signup can reveal address availability. Keep rate limits, password hashing, CSRF, session expiry, and explicit event membership. Do not grant membership based only on an email match. Recovery still requires inbox access; changing an address requires the current password and confirmation at the new address. Broader anti-abuse/address-ownership measures remain future product decisions.
+
+**Cleanup and migration:** Remove verification gates, resend controls/templates, and the user verification flag. Keep `/verify` only for email-change confirmation. Migration `0002_no_signup_verification` removes old signup tokens and the obsolete column without deleting accounts. The worker discards account emails whose tokens are missing, expired, or no longer supported, including old queued signup emails. Original migrations remain unchanged. Downgrade restores the nullable column and old constraint, not consumed/discarded tokens or prior verification timestamps; reverting to the old policy requires fresh verification.
+
+**Verification:** Test immediate protected access, session rotation, no signup email, duplicate-account isolation, complete rollback on session failure, retained recovery/email-change behavior, and PostgreSQL migration/concurrency invariants. Browser journeys cover immediate signup and the remaining real-email flows in English and Polish on desktop/mobile.

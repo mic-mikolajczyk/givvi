@@ -25,7 +25,6 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(254), unique=True)
     password_hash: Mapped[str] = mapped_column(String(512))
     language: Mapped[str] = mapped_column(String(2), default="en")
-    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     pending_email: Mapped[str | None] = mapped_column(String(254), unique=True)
 
 
@@ -46,7 +45,7 @@ class LoginSession(Base):
 
 class AccountToken(Base):
     __tablename__ = "account_tokens"
-    __table_args__ = (CheckConstraint("purpose IN ('verify', 'reset', 'email')", name="token_purpose"),)
+    __table_args__ = (CheckConstraint("purpose IN ('reset', 'email')", name="token_purpose"),)
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)

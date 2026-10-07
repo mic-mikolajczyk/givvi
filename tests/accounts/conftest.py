@@ -44,8 +44,7 @@ def email_token(email_payload):
 
 
 @pytest.fixture
-def verified_user(api, email_token):
+def registered_user(api):
     body = {"name": "Alice", "email": "alice@example.com", "password": "correct horse battery staple", "language": "en"}
-    assert api("register", body).status_code == 202
-    assert api("verify", {"token": email_token()}).status_code == 200
+    assert api("register", body).status_code == 201
     return body

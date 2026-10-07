@@ -4,7 +4,7 @@
 
 Deliver the v1 requirements in [spec.md](spec.md) through small, demonstrable increments. [adr.md](adr.md) records the proposed implementation decisions, alternatives, patterns, and operational strategies. The spec governs product scope; an ADR does not override it.
 
-This is a backlog, not a fixed-date schedule. Phase order expresses dependencies, not sprint duration. Phase 0 implementation is complete and awaiting user review. Later phases require user verification of the preceding phase before work begins.
+This is a backlog, not a fixed-date schedule. Phase order expresses dependencies, not sprint duration. Phase 0 is approved; Phase 1 implementation is ready for review with the MVP immediate-signup change. Later phases require user verification of the preceding phase before work begins.
 
 ## Implementation Principles
 
@@ -75,39 +75,48 @@ The user approved all six clarifications; exact limits and retention rules are r
 
 Local checks passed on 2026-10-07: six backend unit tests, one real PostgreSQL integration test, five Vue component tests, and four desktop/mobile Playwright checks using the version-matched Docker browser runtime. Python lint/import checks, frontend lint/type/build checks, and documentation whitespace checks passed. Desktop/mobile screenshots were inspected.
 
-The CI workflow is configured; a hosted GitHub Actions run has not been executed in this session. Migration checks will be added when Phase 1 introduces migrations. The app currently contains only a service-status screen, not accounts or event functionality.
+The CI workflow is configured; a hosted GitHub Actions run has not been executed in this session. At the Phase 0 checkpoint, the app contained only a service-status screen. Phase 1 adds accounts and migration checks; event functionality remains deferred.
 
-- [ ] User verifies Phase 0 using the [README review steps](../README.md#phase-0-review).
-- [ ] User authorizes beginning Phase 1.
+- [x] User verifies Phase 0 using the [README review steps](../README.md#phase-0-review).
+- [x] User authorizes beginning Phase 1.
 
 ## Phase 1: Accounts and Localized App Shell
 
 **Outcome:** A user can securely authenticate and navigate the bilingual application. Depends on Phase 0.
 
-### Step 1.1: Registration and verification
+### Step 1.1: Registration and Immediate Login
 
-- [ ] P1.1a: Add user, session, one-time token, wishlist ownership, and email outbox migrations with uniqueness constraints.
-- [ ] P1.1b: Implement normalized email lookup, password hashing, registration, and creation of exactly one wishlist in one transaction.
-- [ ] P1.1c: Implement expiring, single-use verification tokens, resend limits, and localized email templates.
-- [ ] P1.1d: Build registration/verification pages with generic responses that do not disclose account existence.
-- [ ] P1.1e: Test duplicate registrations, expired/reused tokens, rollback, provider failure, and English fallback.
+- [x] P1.1a: Add user, session, one-time token, wishlist ownership, and email outbox migrations with uniqueness constraints.
+- [x] P1.1b: Implement normalized email lookup, password hashing, and atomic creation of the user, one wishlist, and an authenticated session.
+- [x] P1.1c: Implement expiring, single-use password-reset/email-change tokens and localized email templates. Do not issue signup verification tokens or emails.
+- [x] P1.1d: Build registration with immediate dashboard navigation and generic duplicate-registration failure; retain email-change confirmation separately.
+- [x] P1.1e: Test automatic login, session rotation, duplicate-registration safety, transaction rollback, no signup email, retained token expiry/replay, provider failure, and English fallback.
 
 ### Step 1.2: Sessions and recovery
 
-- [ ] P1.2a: Implement opaque server-side sessions, secure cookies, CSRF protection, logout, and verified-account guards.
-- [ ] P1.2b: Add login throttling and generic invalid-credential responses.
-- [ ] P1.2c: Add password reset request/consume flows; revoke sessions after reset and rotate identifiers on authentication.
-- [ ] P1.2d: Implement login and recovery pages with safe return-to navigation after an invitation.
-- [ ] P1.2e: Test session expiry, revocation, CSRF rejection, open-redirect rejection, and reset-token replay.
+- [x] P1.2a: Implement opaque server-side sessions, secure cookies, CSRF protection, logout, and authenticated-account guards without a registration-verification gate.
+- [x] P1.2b: Add login throttling and generic invalid-credential responses.
+- [x] P1.2c: Add password reset request/consume flows; revoke sessions after reset and rotate identifiers on authentication.
+- [x] P1.2d: Implement login and recovery pages with safe return-to navigation after an invitation.
+- [x] P1.2e: Test session expiry, revocation, CSRF rejection, open-redirect rejection, and reset-token replay.
 
 ### Step 1.3: Profile and navigation
 
-- [ ] P1.3a: Build Events, Wishlist, and Profile routes with mobile bottom navigation and dedicated pages.
-- [ ] P1.3b: Add name/language editing and password change with reauthentication. Treat email changes as pending until verified.
-- [ ] P1.3c: Add English and Polish catalogs, locale formatting, English fallback, and missing-translation checks.
-- [ ] P1.3d: Verify keyboard navigation, form labels, focus behavior, narrow viewports, and long translated labels.
+- [x] P1.3a: Build Events, Wishlist, and Profile routes with mobile bottom navigation and dedicated pages.
+- [x] P1.3b: Add name/language editing and password change with reauthentication. Treat email changes as pending until verified.
+- [x] P1.3c: Add English and Polish catalogs, locale formatting, English fallback, and missing-translation checks.
+- [x] P1.3d: Verify keyboard navigation, form labels, focus behavior, narrow viewports, and long translated labels.
 
-**Acceptance:** Registration through logout and recovery works in both languages; protected APIs reject unauthenticated/unverified users.
+**Acceptance:** Registration immediately signs the user in without email verification. Logout, recovery, and email-change confirmation work in both languages; protected APIs reject unauthenticated users.
+
+### Phase 1 Verification Checkpoint
+
+Verified locally on 2026-10-07: 33 backend unit tests, five PostgreSQL integration tests, 16 frontend tests, and eight desktop/mobile browser checks passed. Python lint/import checks, frontend lint/type/build checks, and whitespace validation passed. Browser journeys verify immediate signup without email, profile editing, keyboard focus, logout, email-change confirmation, and password recovery in both languages. PostgreSQL checks cover migration drift, competing registration/reset requests, and upgrading an existing unverified account without losing credentials.
+
+The local database is migrated and the API, frontend, and Mailpit worker are running for review. Hosted GitHub Actions has not been run in this session. Events and Wishlist are navigation shells only; management features remain in later phases.
+
+- [ ] User verifies Phase 1 using the [README review steps](../README.md#phase-1-review).
+- [ ] User authorizes beginning Phase 2.
 
 ## Phase 2: Organizer-Managed Events
 
@@ -247,7 +256,7 @@ The CI workflow is configured; a hosted GitHub Actions run has not been executed
 
 | Spec acceptance area | Delivery tasks | Primary evidence |
 | --- | --- | --- |
-| Register, verify, login, reset, profile | P1.1-P1.3 | API and bilingual browser flows |
+| Register with immediate login, reset, profile, email change | P1.1-P1.3 | API and bilingual browser flows |
 | Create event, roster, email/link invite | P2.1-P3.1 | Organizer-to-invitee scenario |
 | Unique claims and authorized access | P3.2 | PostgreSQL race tests and access matrix |
 | Drawing eligibility | P5.1 | Invalid-roster API cases |

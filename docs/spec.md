@@ -18,7 +18,7 @@ This document defines the first release (v1). Features listed as out of scope ar
 
 ### Account user
 
-An account user signs in with a verified email address. Each user owns one wishlist and may participate in multiple events.
+An account user registers and signs in using an email address and password. Registration email verification is not required in the MVP. Each user owns one wishlist and may participate in multiple events.
 
 ### Event admin
 
@@ -34,7 +34,7 @@ An account may claim at most one roster entry in an event, and a roster entry ma
 
 ### Included
 
-- Registration, login, email verification, password reset, and logout.
+- Registration with immediate automatic login, subsequent login, password reset, email-change confirmation, and logout.
 - English and Polish user interface and transactional email.
 - Event creation, editing, roster management, invitations, and event dashboards.
 - Self-service claims against pre-created roster entries.
@@ -55,11 +55,14 @@ An account may claim at most one roster entry in an event, and a roster entry ma
 - Global or event-scoped reservation and purchased markers.
 - Reminder emails, an in-app notification center, and organizer-triggered reminder messages.
 - Social sign-in, passwordless sign-in, and additional languages.
+- Registration email verification and verification-email resending.
 
 ## 5. Account and Onboarding Requirements
 
 - Users register and sign in using email and password.
-- Email verification is required. Users can request a password reset by email.
+- Successful registration creates the account, its one wishlist, and an authenticated session atomically, then opens the dashboard or a validated internal return destination. No verification email is sent and no inbox action is required.
+- Users can request a password reset by email. Changing an existing email address still requires current-password confirmation and verification of the new address before replacement.
+- Duplicate registration does not overwrite an account or authenticate the requester as that account. Show a generic failure with sign-in and recovery options.
 - Transactional emails use the recipient's selected language; English is the fallback.
 - The profile includes the user's name, email, and language preference. Users can update profile details, change their password, and log out.
 - English is the default interface language. Polish is also supported in v1.
@@ -139,7 +142,7 @@ An account may claim at most one roster entry in an event, and a roster entry ma
 
 ## 10. Notifications and Updates
 
-- V1 sends transactional email for account verification, password reset, and event invitations.
+- V1 sends transactional email for email-address changes, password reset, and event invitations. Registration sends no email.
 - The admin may send event invitations by email; accepted participants may invite others by sharing the event link.
 - Email invitations are localized using the recipient's selected language, falling back to English.
 - The event dashboard communicates pending states such as unclaimed roster entries and unrevealed assignments.
@@ -149,6 +152,7 @@ An account may claim at most one roster entry in an event, and a roster entry ma
 
 - Event details, roster membership, wishlists, and assignments are accessible only to signed-in users with the appropriate event membership or ownership.
 - The system must enforce authorization on the server for every protected operation; hiding a control in the interface is not sufficient.
+- Registration does not establish ownership of the supplied email address. Do not treat an email address as proof of identity or grant event membership solely because it matches an invitation; membership and ownership checks remain mandatory.
 - Assignment recipients are visible only to the assigned participant. The event admin can see reveal status, not recipient identity.
 - Account email addresses and account names are not disclosed to other event members by default.
 - Invitation links must be revocable by the admin. A link cannot bypass account registration/login or create roster entries.
@@ -166,7 +170,7 @@ An account may claim at most one roster entry in an event, and a roster entry ma
 
 ## 13. Acceptance Criteria
 
-- A user can register, verify their email, sign in, reset their password, and manage their profile.
+- A user can register and reach the dashboard already signed in, without receiving or opening a verification email. They can subsequently sign in, reset their password, manage their profile, and confirm email-address changes.
 - A user can create an event with the required name and date, add roster entries, and share or email invitations.
 - Invitees can sign in or register, claim unique roster entries, and access only events they belong to.
 - The admin cannot enable drawing with fewer than three claimed participants or with any unclaimed roster entry.
@@ -190,6 +194,6 @@ The following defaults were approved before implementation. They refine the requ
 - Archiving freezes event operations, not users' global wishlists. Previously revealed recipients remain readable in archived and cancelled events, but new reveals are blocked. Unarchiving restores event operations only when the event is not cancelled.
 - Gift prices support EUR and PLN. A known price requires an explicit currency. Gift prices and event budgets use two decimal places and must be between 0 and 999,999.99 inclusive.
 - Initial configurable limits are 100 roster entries per event, 200 gifts per wishlist, 120 characters per name, 2,000 characters per description, and 2,048 characters per URL. These are server-side limits, not just form constraints.
-- Sessions expire after seven days, verification tokens after 24 hours, and password-reset tokens after 30 minutes. Verification/reset tokens are single-use. Invite links remain valid until revoked or regenerated, subject to event-state restrictions.
+- Sessions expire after seven days, email-change confirmation tokens after 24 hours, and password-reset tokens after 30 minutes. Confirmation/reset tokens are single-use. Signup verification tokens are not issued. Invite links remain valid until revoked or regenerated, subject to event-state restrictions.
 - Account deletion removes personal profile/wishlist data and anonymizes historical roster names associated with the account. Retained identity labels become a neutral deleted-user label.
 - Backups expire within 30 days. Deletion records are reapplied when restoring backups before reopening access; immediate physical erasure from existing backups is not promised.

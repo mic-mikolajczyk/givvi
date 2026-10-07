@@ -8,7 +8,7 @@ describe('account API client', () => {
   it('obtains CSRF and sends it only to the same-origin API', async () => {
     const fetch = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ csrf_token: 'test-csrf' })))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ code: 'check_email' }), { status: 202 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ user: { email: 'alice@example.com' }, csrf_token: 'new-csrf' }), { status: 201 }))
     vi.stubGlobal('fetch', fetch)
 
     await request('/auth/register', { email: 'alice@example.com' })

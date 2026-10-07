@@ -25,12 +25,12 @@ for (const language of ['en', 'pl'] as const) {
     const changedEmail = `changed-${randomUUID()}@example.com`
     const password = 'correct horse battery staple'
     const copy = language === 'en' ? {
-      signup: 'Create account', inbox: 'Check your inbox', verify: 'Verify email', verified: 'Email verified',
+      signup: 'Create account', inbox: 'Check your inbox', verify: 'Confirm new email', verified: 'Email verified',
       login: 'Sign in', events: 'Events', profile: 'Profile', save: 'Save', saved: 'Profile saved',
       emailChange: 'Change email', passwordChange: 'Change password', logout: 'Log out', reset: 'Send reset link',
       newPassword: 'Set new password', passwordUpdated: 'Password updated',
     } : {
-      signup: 'Utwórz konto', inbox: 'Sprawdź skrzynkę odbiorczą', verify: 'Potwierdź email', verified: 'Email potwierdzony',
+      signup: 'Utwórz konto', inbox: 'Sprawdź skrzynkę odbiorczą', verify: 'Potwierdź nowy email', verified: 'Email potwierdzony',
       login: 'Zaloguj się', events: 'Wydarzenia', profile: 'Profil', save: 'Zapisz', saved: 'Profil zapisany',
       emailChange: 'Zmień email', passwordChange: 'Zmień hasło', logout: 'Wyloguj się', reset: 'Wyślij link',
       newPassword: 'Ustaw nowe hasło', passwordUpdated: 'Hasło zmienione',
@@ -41,19 +41,15 @@ for (const language of ['en', 'pl'] as const) {
     await page.locator('input[name="email"]').fill(email)
     await page.locator('input[name="password"]').fill(password)
     await page.getByRole('button', { name: copy.signup }).click()
-    await expect(page.getByRole('status')).toHaveText(copy.inbox)
-
-    await page.goto(await emailLink(request, email, 'verify'))
-    await expect(page).not.toHaveURL(/#token=/)
-    await page.getByRole('button', { name: copy.verify }).click()
-    await expect(page.getByRole('status')).toHaveText(copy.verified)
-    await page.getByRole('link', { name: copy.login, exact: true }).click()
-    await page.locator('input[name="email"]').fill(email)
-    await page.locator('input[name="password"]').fill(password)
-    await page.getByRole('button', { name: copy.login }).click()
     await expect(page.getByRole('heading', { name: copy.events, exact: true })).toBeVisible()
+    await expect(page).toHaveURL(/\/events$/)
+    const inbox = await (await request.get('http://127.0.0.1:8025/api/v1/messages')).json()
+    expect(inbox.messages.some((message: { To: { Address: string }[] }) => message.To.some((address) => address.Address === email))).toBe(false)
 
     await page.getByRole('link', { name: copy.profile, exact: true }).click()
+    await page.getByRole('heading', { name: copy.profile, exact: true }).focus()
+    await page.keyboard.press('Tab')
+    await expect(page.locator('input[name="name"]')).toBeFocused()
     await page.locator('input[name="name"]').fill('Alicja Nowak')
     await page.getByRole('button', { name: copy.save, exact: true }).click()
     await expect(page.getByRole('status')).toHaveText(copy.saved)
@@ -65,6 +61,7 @@ for (const language of ['en', 'pl'] as const) {
     await page.getByRole('button', { name: copy.emailChange, exact: true }).click()
     await expect(page.getByRole('status')).toHaveText(copy.inbox)
     await page.goto(await emailLink(request, changedEmail, 'verify'))
+    await expect(page).not.toHaveURL(/#token=/)
     await page.getByRole('button', { name: copy.verify }).click()
     await expect(page.getByRole('status')).toHaveText(copy.verified)
     await page.getByRole('link', { name: copy.login, exact: true }).click()
