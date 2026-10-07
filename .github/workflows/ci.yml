@@ -11,6 +11,11 @@ jobs:
   foundation:
     runs-on: ubuntu-latest
     services:
+      mailpit:
+        image: axllent/mailpit:v1.27.8
+        ports:
+          - 1025:1025
+          - 8025:8025
       postgres:
         image: postgres:17.6-bookworm
         env:
@@ -27,6 +32,9 @@ jobs:
     env:
       GIVVI_DATABASE_URL: postgresql+psycopg://givvi:test-only-password@127.0.0.1:5432/givvi_test
       GIVVI_TEST_DATABASE_URL: postgresql+psycopg://givvi:test-only-password@127.0.0.1:5432/givvi_test
+      GIVVI_OUTBOX_KEY: MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=
+      GIVVI_COOKIE_SECURE: 'false'
+      GIVVI_APP_ORIGIN: http://127.0.0.1:5173
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -41,7 +49,7 @@ jobs:
       - name: Install backend dependencies
         run: python -m venv .venv && .venv/bin/python -m pip install -r requirements-dev.txt
       - name: Check Python style
-        run: .venv/bin/python -m flake8 givvi tests && .venv/bin/python -m isort --check-only givvi tests
+        run: .venv/bin/python -m flake8 givvi tests migrations && .venv/bin/python -m isort --check-only givvi tests migrations
       - name: Run backend tests
         run: .venv/bin/python -m pytest -q && .venv/bin/python -m pytest -m integration -q
       - name: Install frontend dependencies
@@ -52,7 +60,12 @@ jobs:
         working-directory: frontend
         run: npx playwright install --with-deps chromium
       - name: Run browser tests
-        run: npm --prefix frontend run test:e2e
+        run: |
+          .venv/bin/flask --app givvi db-upgrade
+          .venv/bin/flask --app givvi mail-worker --watch &
+          worker_pid=$!
+          trap 'kill "$worker_pid"' EXIT
+          npm --prefix frontend run test:e2e
       - name: Upload browser artifacts
         if: failure()
         uses: actions/upload-artifact@v4

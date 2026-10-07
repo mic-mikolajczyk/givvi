@@ -14,7 +14,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: '.venv/bin/flask --env-file .env.example --app givvi run --port 5000 --no-reload',
+      command: '.venv/bin/flask --env-file .env.example --app givvi db-upgrade && .venv/bin/flask --env-file .env.example --app givvi run --port 5000 --no-reload',
       cwd: '..',
       url: 'http://127.0.0.1:5000/api/health/ready',
       reuseExistingServer: !process.env.CI,

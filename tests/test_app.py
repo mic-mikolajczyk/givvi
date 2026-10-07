@@ -1,3 +1,4 @@
+from cryptography.fernet import Fernet
 from flask import Flask
 import pytest
 
@@ -32,6 +33,7 @@ def test_missing_database_configuration_fails_fast(monkeypatch: pytest.MonkeyPat
 
 def test_environment_configuration_is_loaded(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GIVVI_DATABASE_URL", "sqlite://")
+    monkeypatch.setenv("GIVVI_OUTBOX_KEY", Fernet.generate_key().decode())
     application = create_app()
 
     assert application.config["DATABASE_URL"] == "sqlite://"

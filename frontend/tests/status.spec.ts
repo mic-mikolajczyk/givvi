@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 test('displays real readiness in English and Polish without overflow', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/status')
 
   await expect(page.getByRole('heading', { name: 'Service status' })).toBeVisible()
   await expect(page.getByRole('status')).toHaveText('Connected')
@@ -20,7 +20,7 @@ test('recovers from an unavailable response', async ({ page }) => {
     contentType: 'application/json',
     body: JSON.stringify({ status: 'unavailable' }),
   }))
-  await page.goto('/')
+  await page.goto('/status')
   await expect(page.getByRole('status')).toHaveText('Unavailable')
 
   await page.unroute('**/api/health/ready')
