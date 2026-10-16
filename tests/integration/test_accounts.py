@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date
 from datetime import timedelta
 import os
 from threading import Barrier
@@ -13,6 +14,7 @@ from sqlalchemy import create_engine
 from sqlalchemy import inspect
 from sqlalchemy import select
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateSchema
 from sqlalchemy.schema import DropSchema
@@ -23,6 +25,8 @@ from givvi.accounts.security import now
 from givvi.accounts.services import reset_password
 from givvi.errors import ApiError
 from givvi.models import AccountToken
+from givvi.models import Event
+from givvi.models import EventParticipant
 from givvi.models import User
 from givvi.models import Wishlist
 
@@ -69,8 +73,33 @@ def test_migration_upgrade_downgrade_and_registration(migrated_app) -> None:
         command.check(config)
         command.downgrade(config, "base")
         assert "users" not in inspect(connection).get_table_names()
+        assert "events" not in inspect(connection).get_table_names()
         command.upgrade(config, "head")
         assert "users" in inspect(connection).get_table_names()
+        assert "events" in inspect(connection).get_table_names()
+        assert "event_participants" in inspect(connection).get_table_names()
+
+
+@pytest.mark.integration
+def test_database_rejects_duplicate_user_claims_in_one_event(migrated_app) -> None:
+    app, unused_config = migrated_app
+    with Session(app.extensions["database"]) as database, database.begin():
+        admin = User(name="Admin", email="admin@example.com", password_hash="unused", language="en")
+        participant = User(name="Participant", email="participant@example.com", password_hash="unused", language="en")
+        database.add_all([admin, participant])
+        database.flush()
+        event = Event(admin_id=admin.id, name="Exchange", exchange_date=date(2026, 12, 20), time_zone="UTC", currency="EUR")
+        database.add(event)
+        database.flush()
+        database.add(EventParticipant(event_id=event.id, name="Roster name", user_id=participant.id))
+        database.flush()
+        event_id = event.id
+        participant_id = participant.id
+
+    with pytest.raises(IntegrityError):
+        with Session(app.extensions["database"]) as database, database.begin():
+            database.add(EventParticipant(event_id=event_id, name="Second name", user_id=participant_id))
+            database.flush()
 
 
 @pytest.mark.integration

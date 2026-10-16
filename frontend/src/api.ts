@@ -8,6 +8,30 @@ export interface User {
   pending_email: string | null
 }
 
+export interface EventParticipant {
+  id: string
+  name: string
+  claimed: boolean
+}
+
+export interface EventRecord {
+  id: string
+  name: string
+  exchange_date: string
+  exchange_time: string | null
+  time_zone: string
+  location: string | null
+  description: string | null
+  currency: 'EUR' | 'PLN'
+  budget: string | null
+  is_admin: boolean
+  drawing_enabled: boolean
+  archived: boolean
+  cancelled: boolean
+  period: 'upcoming' | 'ongoing' | 'past'
+  participants: EventParticipant[]
+}
+
 export const currentUser = ref<User | null>(null)
 let csrfToken = ''
 let csrfRequest: Promise<void> | undefined
@@ -32,11 +56,16 @@ async function ensureCsrf() {
   await csrfRequest
 }
 
-export async function request<T = Record<string, unknown>>(path: string, body?: object, retryCsrf = true): Promise<T> {
+export async function request<T = Record<string, unknown>>(
+  path: string,
+  body?: object,
+  retryCsrf = true,
+  method: 'POST' | 'PATCH' | 'DELETE' = 'POST',
+): Promise<T> {
   try {
     if (body) await ensureCsrf()
     const response = await fetch(`/api${path}`, {
-      method: body ? 'POST' : 'GET',
+      method: body ? method : 'GET',
       credentials: 'same-origin',
       cache: 'no-store',
       signal: AbortSignal.timeout(10000),
@@ -47,7 +76,7 @@ export async function request<T = Record<string, unknown>>(path: string, body?: 
     if (!response.ok) {
       if (payload.code === 'csrf_invalid' && body && retryCsrf) {
         csrfToken = ''
-        return await request<T>(path, body, false)
+        return await request<T>(path, body, false, method)
       }
       if (payload.code === 'unauthenticated') clearSession()
       throw new ApiError(payload.code || 'internal_error', payload.field_errors || {}, payload.request_id || '')

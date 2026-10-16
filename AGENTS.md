@@ -60,7 +60,7 @@ def my_function(param1: int, param2: str, param3: float) -> None:
 ## Python Project setup
 
 - Use virtual environments to manage dependencies and isolate project environments.
-- virtual environment directory `.venv`
+- virtual environment directory `.venv` or `.venv3.13`
 - Use pip for package management and requirements.txt for listing dependencies.
 - dependencies should be listed with fixed version
 - main package should be named as project

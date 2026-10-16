@@ -9,6 +9,8 @@ import StatusView from './views/StatusView.vue'
 import AccountShell from './views/AccountShell.vue'
 import AuthView from './views/AuthView.vue'
 import DashboardView from './views/DashboardView.vue'
+import EventDetailView from './views/EventDetailView.vue'
+import EventsView from './views/EventsView.vue'
 import ProfileView from './views/ProfileView.vue'
 
 const router = createRouter({
@@ -19,7 +21,8 @@ const router = createRouter({
     ...['login', 'register', 'verify', 'forgot-password', 'reset-password'].map((name) => ({ path: `/${name}`, name, component: AuthView })),
     {
       path: '/', component: AccountShell, meta: { authenticated: true }, children: [
-        { path: 'events', name: 'events', component: DashboardView },
+        { path: 'events', name: 'events', component: EventsView },
+        { path: 'events/:eventId', name: 'event', component: EventDetailView },
         { path: 'wishlist', name: 'wishlist', component: DashboardView },
         { path: 'profile', name: 'profile', component: ProfileView },
       ],

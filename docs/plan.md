@@ -115,8 +115,8 @@ Verified locally on 2026-10-07: 33 backend unit tests, five PostgreSQL integrati
 
 The local database is migrated and the API, frontend, and Mailpit worker are running for review. Hosted GitHub Actions has not been run in this session. Events and Wishlist are navigation shells only; management features remain in later phases.
 
-- [ ] User verifies Phase 1 using the [README review steps](../README.md#phase-1-review).
-- [ ] User authorizes beginning Phase 2.
+- [x] User verifies Phase 1 using the [README review steps](../README.md#phase-1-review).
+- [x] User authorizes beginning Phase 2.
 
 ## Phase 2: Organizer-Managed Events
 
@@ -124,20 +124,29 @@ The local database is migrated and the API, frontend, and Mailpit worker are run
 
 ### Step 2.1: Event creation and listing
 
-- [ ] P2.1a: Add event and participant migrations, one-admin ownership, lifecycle fields, time zone, date/time, and decimal budget.
-- [ ] P2.1b: Implement create/read/edit endpoints using shared authorization and domain validation.
-- [ ] P2.1c: Create event form and dashboard; apply EUR/PLN defaults once at creation without later language-driven changes.
-- [ ] P2.1d: List owned/joined events with pagination and exchange-date grouping in each event's time zone.
-- [ ] P2.1e: Test date boundaries, daylight-saving behavior, missing required fields, invalid currency/budget, and cross-event access denial.
+- [x] P2.1a: Add event and participant migrations, one-admin ownership, lifecycle fields, time zone, date/time, and decimal budget.
+- [x] P2.1b: Implement create/read/edit endpoints using shared authorization and domain validation.
+- [x] P2.1c: Create event form and dashboard; apply EUR/PLN defaults once at creation without later language-driven changes.
+- [x] P2.1d: List owned/joined events with pagination and exchange-date grouping in each event's time zone.
+- [x] P2.1e: Test date boundaries, daylight-saving behavior, missing required fields, invalid currency/budget, and cross-event access denial.
 
 ### Step 2.2: Roster preparation
 
-- [ ] P2.2a: Implement admin-only roster add, rename, remove, and claim correction while drawing is disabled.
-- [ ] P2.2b: Build roster editing and pending-status views; do not automatically enroll the organizer.
-- [ ] P2.2c: Add constraints for one user per event entry and one claimed entry per user per event.
-- [ ] P2.2d: Test non-admin attempts, duplicate claims, organizer participation, and rejected mutations of read-only events.
+- [x] P2.2a: Implement admin-only roster add, rename, and remove while drawing is disabled. Claim correction follows in P3.2c, after claims exist.
+- [x] P2.2b: Build roster editing and pending-status views; do not automatically enroll the organizer.
+- [x] P2.2c: Add constraints for one user per event entry and one claimed entry per user per event.
+- [x] P2.2d: Test non-admin attempts, duplicate claims, organizer participation, and rejected mutations of read-only events.
 
 **Acceptance:** The admin can prepare an event and roster; other accounts cannot inspect or mutate it without authorized access.
+
+### Phase 2 Verification Checkpoint
+
+Verified locally on 2026-10-16: event creation, editing, pagination, local-date grouping, DST validation, roster management, authorization, and database claim uniqueness pass their unit and PostgreSQL checks. English and Polish browser journeys pass on desktop and mobile. Phase 2 Python files pass lint/import checks; frontend tests, lint, typecheck, and build pass. Repository-wide flake8 still reports a continuation-indentation warning in the pre-existing `givvi/mail.py` edit. The hosted GitHub Actions workflow has not been run.
+
+The Events view is ready for user review. Invitations, self-service claims, wishlists, and drawing remain later-phase functionality. Claim correction is scheduled with P3.2c because it requires an existing claim.
+
+- [ ] User verifies Phase 2 using the [README review steps](../README.md#phase-2-review).
+- [ ] User authorizes beginning Phase 3.
 
 ## Phase 3: Invitations and Self-Service Claims
 
@@ -155,7 +164,7 @@ The local database is migrated and the API, frontend, and Mailpit worker are run
 
 - [ ] P3.2a: Implement self-service claim transactions with event locking and uniqueness conflict handling.
 - [ ] P3.2b: Build claim selection and conflict recovery; users cannot create new entries through a link.
-- [ ] P3.2c: Refresh roster status after claims and admin corrections; reject claims while drawing is enabled or the event is read-only.
+- [ ] P3.2c: Allow admin correction of an existing claim while drawing is disabled; refresh roster status after claims/corrections and reject claims while drawing is enabled or the event is read-only.
 - [ ] P3.2d: Run PostgreSQL tests for competing claims, claim versus drawing, and claim versus roster removal.
 
 **Acceptance:** Only one concurrent claimant succeeds; a joined participant sees event details, while an invite holder does not gain unrestricted access.

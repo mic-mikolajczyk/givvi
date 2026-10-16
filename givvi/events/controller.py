@@ -1,0 +1,154 @@
+from datetime import timezone
+from zoneinfo import ZoneInfo
+
+from flask import Blueprint
+from flask import current_app
+from flask import jsonify
+from flask import request
+from flask import Response
+from sqlalchemy import func
+from sqlalchemy import or_
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from givvi.accounts.security import require_csrf
+from givvi.accounts.security import require_user
+from givvi.errors import ApiError
+from givvi.events import services
+from givvi.models import Event
+from givvi.models import EventParticipant
+
+events = Blueprint("events", __name__, url_prefix="/api/events")
+
+
+def request_body() -> dict:
+    body = request.get_json()
+    if not isinstance(body, dict):
+        raise ApiError("invalid_request", 400)
+    return body
+
+
+def event_response(database: Session, event: Event, user_id: str) -> dict:
+    view = services.event_view(event, user_id, services.roster(database, event.id))
+    view["period"] = event_period(event)
+    return view
+
+
+def get_admin_event(database: Session, event_id: str, user_id: str, lock: bool = False) -> Event:
+    event = services.event_for_user(database, event_id, user_id, lock=lock)
+    services.require_admin(event, user_id)
+    return event
+
+
+def event_period(event: Event) -> str:
+    clock = current_app.config["CLOCK"]()
+    today = clock.astimezone(ZoneInfo(event.time_zone)).date() if clock.tzinfo else clock.replace(
+        tzinfo=timezone.utc).astimezone(ZoneInfo(event.time_zone)).date()
+    if event.exchange_date < today:
+        return "past"
+    return "ongoing" if event.exchange_date == today else "upcoming"
+
+
+@events.get("")
+def list_events() -> Response:
+    try:
+        page = int(request.args.get("page", "1"))
+        page_size = int(request.args.get("page_size", "50"))
+    except ValueError:
+        raise ApiError("invalid_request", 400) from None
+    if page < 1 or page_size < 1 or page_size > 100:
+        raise ApiError("invalid_request", 400)
+
+    with Session(current_app.extensions["database"]) as database, database.begin():
+        user = require_user(database)
+        member_event_ids = select(EventParticipant.event_id).where(EventParticipant.user_id == user.id)
+        visibility = or_(Event.admin_id == user.id, Event.id.in_(member_event_ids))
+        query = select(Event).where(visibility).order_by(Event.exchange_date, Event.id)
+        found = list(database.scalars(query.offset((page - 1) * page_size).limit(page_size)))
+        total_count = database.scalar(select(func.count()).select_from(Event).where(visibility)) or 0
+        result = []
+        for event in found:
+            result.append(event_response(database, event, user.id))
+        return jsonify(events=result, page=page, page_size=page_size, total=total_count)
+
+
+@events.post("")
+def create_event() -> tuple[Response, int]:
+    with Session(current_app.extensions["database"]) as database, database.begin():
+        require_csrf(database)
+        user = require_user(database)
+        values = services.validate_event_fields(request_body(), user=user)
+        services.ensure_valid_local_time(values["exchange_date"], values["exchange_time"], values["time_zone"])
+        event = Event(admin_id=user.id, **values)
+        database.add(event)
+        database.flush()
+        return jsonify(event=event_response(database, event, user.id)), 201
+
+
+@events.get("/<event_id>")
+def get_event(event_id: str) -> Response:
+    with Session(current_app.extensions["database"]) as database, database.begin():
+        user = require_user(database)
+        event = services.event_for_user(database, event_id, user.id)
+        return jsonify(event=event_response(database, event, user.id))
+
+
+@events.patch("/<event_id>")
+def update_event(event_id: str) -> Response:
+    with Session(current_app.extensions["database"]) as database, database.begin():
+        require_csrf(database)
+        user = require_user(database)
+        event = get_admin_event(database, event_id, user.id, lock=True)
+        services.require_writable(event)
+        values = services.validate_event_fields(request_body(), existing=event)
+        services.ensure_valid_local_time(values["exchange_date"], values["exchange_time"], values["time_zone"])
+        for field, value in values.items():
+            setattr(event, field, value)
+        database.flush()
+        return jsonify(event=event_response(database, event, user.id))
+
+
+@events.post("/<event_id>/participants")
+def create_participant(event_id: str) -> tuple[Response, int]:
+    with Session(current_app.extensions["database"]) as database, database.begin():
+        require_csrf(database)
+        user = require_user(database)
+        event = get_admin_event(database, event_id, user.id, lock=True)
+        participant = services.add_participant(database, event, request_body().get("name"))
+        return jsonify(participant={"id": participant.id, "name": participant.name, "claimed": False}), 201
+
+
+@events.patch("/<event_id>/participants/<participant_id>")
+def rename_participant(event_id: str, participant_id: str) -> Response:
+    with Session(current_app.extensions["database"]) as database, database.begin():
+        require_csrf(database)
+        user = require_user(database)
+        event = get_admin_event(database, event_id, user.id, lock=True)
+        services.require_writable(event)
+        participant = database.scalar(select(EventParticipant).where(
+            EventParticipant.id == participant_id, EventParticipant.event_id == event.id,
+        ).with_for_update())
+        if not participant:
+            raise ApiError("not_found", 404)
+        services.update_participant(participant, request_body().get("name"))
+        return jsonify(participant={
+            "id": participant.id, "name": participant.name, "claimed": participant.user_id is not None,
+        })
+
+
+@events.delete("/<event_id>/participants/<participant_id>")
+def remove_participant(event_id: str, participant_id: str) -> Response:
+    with Session(current_app.extensions["database"]) as database, database.begin():
+        require_csrf(database)
+        user = require_user(database)
+        event = get_admin_event(database, event_id, user.id, lock=True)
+        services.require_writable(event)
+        participant = database.scalar(select(EventParticipant).where(
+            EventParticipant.id == participant_id, EventParticipant.event_id == event.id,
+        ).with_for_update())
+        if not participant:
+            raise ApiError("not_found", 404)
+        if participant.user_id is not None:
+            raise ApiError("participant_claimed", 409)
+        database.delete(participant)
+        return jsonify(code="participant_removed")

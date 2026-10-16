@@ -11,6 +11,7 @@ from sqlalchemy.engine import make_url
 from givvi.accounts.controller import accounts
 from givvi.commands import register_commands
 from givvi.errors import configure_errors
+from givvi.events.controller import events
 from givvi.health import health
 
 DATABASE_CONNECT_TIMEOUT_SECONDS = 3
@@ -58,5 +59,6 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
     app.register_blueprint(health)
     configure_errors(app)
     app.register_blueprint(accounts)
+    app.register_blueprint(events)
     register_commands(app)
     return app

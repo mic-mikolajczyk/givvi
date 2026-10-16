@@ -73,10 +73,13 @@ def deliver_pending(app: Flask, sender: Callable[[dict], None] | None = None, li
         for unused_index in range(limit):
             with Session(engine) as database, database.begin():
                 record = database.scalar(select(EmailMessage).where(
-                    EmailMessage.payload.is_not(None), EmailMessage.delivered_at.is_(None),
-                    EmailMessage.failed_at.is_(None), EmailMessage.available_at <= now(),
+                    EmailMessage.payload.is_not(None),
+                    EmailMessage.delivered_at.is_(None),
+                    EmailMessage.failed_at.is_(None),
+                    EmailMessage.available_at <= now(),
                     EmailMessage.expires_at > now(),
-                    or_(EmailMessage.lease_until.is_(None), EmailMessage.lease_until <= now()),
+                    or_(EmailMessage.lease_until.is_(None),
+                    EmailMessage.lease_until <= now()),
                 ).order_by(EmailMessage.available_at).with_for_update(skip_locked=True).limit(1))
                 if not record:
                     break

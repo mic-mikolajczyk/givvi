@@ -10,7 +10,7 @@ Project verifies and indirectale measure how does AI affect software development
 
 ## Development Status
 
-Phase 0 is approved. Phase 1 adds bilingual account flows and the application shell. MVP registration signs users in immediately without sending a verification email. Password recovery and confirmation of email-address changes remain supported. Event and gift management are not implemented yet. Each phase is reviewed by the user before the next begins.
+Phase 0 and Phase 1 are verified. Phase 2 adds event creation, listing, editing, and organizer-managed rosters. Registration signs users in immediately without sending a verification email; password recovery and email-change confirmation remain supported. Invitations, claims, wishlists, and drawing are later-phase work. Each phase is reviewed by the user before the next begins.
 
 - [Product specification](docs/spec.md)
 - [Delivery plan](docs/plan.md)
@@ -104,7 +104,16 @@ Screenshots and failure traces are written under the ignored frontend test-resul
 3. Log out and sign in with the same credentials. Duplicate signup must not overwrite or sign into an existing account.
 4. Exercise password recovery through the Mailpit inbox; the reset link is single-use and invalidates existing sessions.
 5. Change your email from Profile using the current password. The old email remains active until the new inbox confirms the change.
-6. Review Phase 1 before authorizing event implementation. Events and Wishlist currently show empty shells, not management features.
+6. Review the Phase 1 checkpoint in the delivery plan before continuing to Phase 2.
+
+## Phase 2 Review
+
+1. Register or sign in at http://127.0.0.1:5173/events and create an event with a name, date, and time zone. English defaults to EUR; Polish defaults to PLN.
+2. Open the event, edit its details, and confirm the selected currency remains unchanged if you later change your interface language.
+3. Add, rename, and remove unclaimed roster entries. The organizer is not automatically enrolled; each added entry remains marked as unclaimed.
+4. Sign in with a different account and open the event URL directly. The event must remain inaccessible, and only its admin can edit details or the roster.
+5. Review upcoming, ongoing, and past grouping against the event's time zone, then check the layout on desktop and a narrow mobile viewport.
+6. Invitations and claims are not part of this phase; use the delivery plan checkpoint to review Phase 2 before authorizing Phase 3.
 
 ## Upgrading Existing Development Data
 
