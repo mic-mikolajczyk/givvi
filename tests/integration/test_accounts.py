@@ -1,25 +1,16 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from datetime import timedelta
-import os
 from threading import Barrier
-from uuid import uuid4
 
 from alembic import command
-from alembic.config import Config
 from argon2 import PasswordHasher
-from cryptography.fernet import Fernet
 import pytest
-from sqlalchemy import create_engine
 from sqlalchemy import inspect
 from sqlalchemy import select
-from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from sqlalchemy.schema import CreateSchema
-from sqlalchemy.schema import DropSchema
 
-from givvi import create_app
 from givvi.accounts.security import digest
 from givvi.accounts.security import now
 from givvi.accounts.services import reset_password
@@ -29,31 +20,6 @@ from givvi.models import Event
 from givvi.models import EventParticipant
 from givvi.models import User
 from givvi.models import Wishlist
-
-
-@pytest.fixture
-def migrated_app():
-    url = os.environ.get("GIVVI_TEST_DATABASE_URL")
-    if not url:
-        pytest.fail("GIVVI_TEST_DATABASE_URL is required")
-    schema = f"test_{uuid4().hex}"
-    admin_engine = create_engine(url)
-    with admin_engine.begin() as connection:
-        connection.execute(CreateSchema(schema))
-    scoped_url = make_url(url).update_query_dict({"options": f"-csearch_path={schema}"})
-    app = create_app({"TESTING": True, "DATABASE_URL": scoped_url,
-                     "OUTBOX_KEY": Fernet.generate_key().decode(), "COOKIE_SECURE": False})
-    config = Config("alembic.ini")
-    try:
-        with app.extensions["database"].begin() as connection:
-            config.attributes["connection"] = connection
-            command.upgrade(config, "head")
-        yield app, config
-    finally:
-        app.extensions["database"].dispose()
-        with admin_engine.begin() as connection:
-            connection.execute(DropSchema(schema, cascade=True))
-        admin_engine.dispose()
 
 
 @pytest.mark.integration
@@ -78,6 +44,9 @@ def test_migration_upgrade_downgrade_and_registration(migrated_app) -> None:
         assert "users" in inspect(connection).get_table_names()
         assert "events" in inspect(connection).get_table_names()
         assert "event_participants" in inspect(connection).get_table_names()
+        assert {"invite_token_hash", "invite_token_encrypted"} <= {
+            column["name"] for column in inspect(connection).get_columns("events")
+        }
 
 
 @pytest.mark.integration

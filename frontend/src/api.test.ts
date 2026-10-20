@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiError, clearSession, request, safeReturnTo } from './api'
+import { ApiError, clearSession, publicRequest, request, safeReturnTo } from './api'
 
 beforeEach(() => clearSession())
 
@@ -36,6 +36,17 @@ describe('account API client', () => {
       expect(error).toBeInstanceOf(ApiError)
       expect((error as ApiError).fields.email).toBe('invalid_email')
     }
+  })
+
+  it('sends invite previews without obtaining or attaching a CSRF token', async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ invitation: { participants: [] } })))
+    vi.stubGlobal('fetch', fetch)
+
+    await publicRequest('/events/event-1/invitation-preview', { token: 'invite-secret' })
+
+    expect(fetch).toHaveBeenCalledOnce()
+    expect(fetch.mock.calls[0][1].headers).toEqual({ 'Content-Type': 'application/json' })
+    expect(fetch.mock.calls[0][1].body).toBe(JSON.stringify({ token: 'invite-secret' }))
   })
 })
 

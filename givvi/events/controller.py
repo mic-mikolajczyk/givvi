@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from givvi.accounts.security import require_csrf
 from givvi.accounts.security import require_user
+from givvi.accounts.security import throttle
 from givvi.errors import ApiError
 from givvi.events import services
 from givvi.models import Event
@@ -152,3 +153,82 @@ def remove_participant(event_id: str, participant_id: str) -> Response:
             raise ApiError("participant_claimed", 409)
         database.delete(participant)
         return jsonify(code="participant_removed")
+
+
+@events.post("/<event_id>/invite-link")
+def regenerate_invite_link(event_id: str) -> Response:
+    with Session(current_app.extensions["database"]) as database, database.begin():
+        require_csrf(database)
+        user = require_user(database)
+        event = get_admin_event(database, event_id, user.id, lock=True)
+        services.require_writable(event)
+        token = services.rotate_invite_token(event)
+        return jsonify(link=services.invitation_link(event, token))
+
+
+@events.get("/<event_id>/invite-link")
+def get_invite_link(event_id: str) -> Response:
+    with Session(current_app.extensions["database"]) as database, database.begin():
+        user = require_user(database)
+        event = services.event_for_user(database, event_id, user.id)
+        services.require_writable(event)
+        return jsonify(link=services.invitation_link(event))
+
+
+@events.delete("/<event_id>/invite-link")
+def revoke_invite_link(event_id: str) -> Response:
+    with Session(current_app.extensions["database"]) as database, database.begin():
+        require_csrf(database)
+        user = require_user(database)
+        event = get_admin_event(database, event_id, user.id, lock=True)
+        services.require_writable(event)
+        event.invite_token_hash = None
+        event.invite_token_encrypted = None
+        return jsonify(code="invite_link_revoked")
+
+
+@events.post("/<event_id>/invitations")
+def send_invitation(event_id: str) -> tuple[Response, int]:
+    with Session(current_app.extensions["database"]) as database, database.begin():
+        require_csrf(database)
+        user = require_user(database)
+        event = get_admin_event(database, event_id, user.id, lock=True)
+        services.require_writable(event)
+        email = request_body().get("email")
+        throttle("event_invitation", str(email).casefold() if isinstance(email, str) else "")
+        if not event.invite_token_hash:
+            services.rotate_invite_token(event)
+        services.queue_invitation_email(database, event, email)
+        return jsonify(code="invitation_queued"), 202
+
+
+@events.post("/<event_id>/invitation-preview")
+def preview_invitation(event_id: str) -> Response:
+    with Session(current_app.extensions["database"]) as database, database.begin():
+        invitation = services.invitation_preview(database, event_id, request_body().get("token"))
+        return jsonify(invitation=invitation)
+
+
+@events.post("/<event_id>/claim")
+def claim_event_participant(event_id: str) -> Response:
+    with Session(current_app.extensions["database"]) as database, database.begin():
+        require_csrf(database)
+        user = require_user(database)
+        event = database.scalar(select(Event).where(Event.id == event_id).with_for_update())
+        if not event:
+            raise ApiError("invite_invalid", 404)
+        body = request_body()
+        throttle("event_claim", user.email)
+        services.claim_participant(database, event, user, body.get("participant_id"), body.get("token"))
+        database.flush()
+        return jsonify(event=event_response(database, event, user.id), code="claim_completed")
+
+
+@events.delete("/<event_id>/participants/<participant_id>/claim")
+def release_event_claim(event_id: str, participant_id: str) -> Response:
+    with Session(current_app.extensions["database"]) as database, database.begin():
+        require_csrf(database)
+        user = require_user(database)
+        event = get_admin_event(database, event_id, user.id, lock=True)
+        services.release_claim(database, event, participant_id)
+        return jsonify(code="claim_released")

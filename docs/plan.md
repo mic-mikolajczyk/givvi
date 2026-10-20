@@ -145,8 +145,8 @@ Verified locally on 2026-10-16: event creation, editing, pagination, local-date 
 
 The Events view is ready for user review. Invitations, self-service claims, wishlists, and drawing remain later-phase functionality. Claim correction is scheduled with P3.2c because it requires an existing claim.
 
-- [ ] User verifies Phase 2 using the [README review steps](../README.md#phase-2-review).
-- [ ] User authorizes beginning Phase 3.
+- [x] User verifies Phase 2 using the [README review steps](../README.md#phase-2-review).
+- [x] User authorizes beginning Phase 3.
 
 ## Phase 3: Invitations and Self-Service Claims
 
@@ -154,20 +154,26 @@ The Events view is ready for user review. Invitations, self-service claims, wish
 
 ### Step 3.1: Invitation entry
 
-- [ ] P3.1a: Add hashed event-link secrets, revocation/regeneration, and admin email invitation endpoints.
-- [ ] P3.1b: Implement a limited claim-entry response consistent with P0.1a; preserve access through registration/login without leaking tokens.
-- [ ] P3.1c: Allow accepted participants to share the current link; restrict email invitation sending to the admin.
-- [ ] P3.1d: Localize invitation emails using the recipient's preference or English when unknown.
-- [ ] P3.1e: Test revoked links, token leakage prevention, invalid return URLs, and rate limits.
+- [x] P3.1a: Add hashed event-link secrets, revocation/regeneration, and admin email invitation endpoints.
+- [x] P3.1b: Implement a limited claim-entry response consistent with P0.1a; preserve access through registration/login without leaking tokens.
+- [x] P3.1c: Allow accepted participants to share the current link; restrict email invitation sending to the admin.
+- [x] P3.1d: Localize invitation emails using the recipient's preference or English when unknown.
+- [x] P3.1e: Test revoked links, token leakage prevention, invalid return URLs, and rate limits.
 
 ### Step 3.2: Atomic claims
 
-- [ ] P3.2a: Implement self-service claim transactions with event locking and uniqueness conflict handling.
-- [ ] P3.2b: Build claim selection and conflict recovery; users cannot create new entries through a link.
-- [ ] P3.2c: Allow admin correction of an existing claim while drawing is disabled; refresh roster status after claims/corrections and reject claims while drawing is enabled or the event is read-only.
-- [ ] P3.2d: Run PostgreSQL tests for competing claims, claim versus drawing, and claim versus roster removal.
+- [x] P3.2a: Implement self-service claim transactions with event locking and uniqueness conflict handling.
+- [x] P3.2b: Build claim selection and conflict recovery; users cannot create new entries through a link.
+- [x] P3.2c: Allow admin correction of an existing claim while drawing is disabled; refresh roster status after claims/corrections and reject claims while drawing is enabled or the event is read-only.
+- [x] P3.2d: Run PostgreSQL tests for competing claims, the drawing-enabled guard, and claim versus roster removal. The concurrent claim-versus-draw transition test depends on the drawing operation in P5.1b and is required there.
 
 **Acceptance:** Only one concurrent claimant succeeds; a joined participant sees event details, while an invite holder does not gain unrestricted access.
+
+### Phase 3 Verification Checkpoint
+
+Verified locally on 2026-10-20: 57 backend unit tests and nine PostgreSQL integration tests pass, including migration drift, competing claims, one-account uniqueness across sessions, claim versus roster removal, and drawing-enabled claim rejection. The race against draw generation remains a P5.1b/P5.1e gate because drawing does not yet exist. All 27 frontend component/API tests, typecheck, and production build pass. The full 16-test desktop/mobile Playwright suite passed, and all four bilingual invite journeys passed again after the final conflict-recovery change. Frontend ESLint exits successfully with Vue template-formatting warnings in the compact Event Detail and Events views; it reports no errors. The hosted GitHub Actions workflow has not been run.
+
+The invite-to-claim flow is ready for user review. Wishlists and drawing remain unimplemented.
 
 ## Phase 4: Wishlist Management and Event Viewing
 
@@ -200,7 +206,7 @@ The Events view is ready for user review. Invitations, self-service claims, wish
 - [ ] P5.1b: Implement enable-drawing under an event lock; validate three or more claimed entries and reject unclaimed entries.
 - [ ] P5.1c: Generate an unbiased shuffled permutation using secure randomness, rejecting self-pairings; validate the complete result before committing.
 - [ ] P5.1d: Lock roster and claims while enabled; return status only, never the assignment mapping.
-- [ ] P5.1e: Test invariants across roster sizes and seeded test randomness, rollback, duplicate enable requests, and concurrent roster changes.
+- [ ] P5.1e: Test invariants across roster sizes and seeded test randomness, rollback, duplicate enable requests, and concurrent claims/roster changes against drawing.
 
 ### Step 5.2: Reveal and reset
 

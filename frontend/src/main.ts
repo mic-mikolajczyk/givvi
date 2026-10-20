@@ -11,6 +11,7 @@ import AuthView from './views/AuthView.vue'
 import DashboardView from './views/DashboardView.vue'
 import EventDetailView from './views/EventDetailView.vue'
 import EventsView from './views/EventsView.vue'
+import InvitationView from './views/InvitationView.vue'
 import ProfileView from './views/ProfileView.vue'
 
 const router = createRouter({
@@ -19,6 +20,7 @@ const router = createRouter({
     { path: '/', redirect: '/events' },
     { path: '/status', component: StatusView },
     ...['login', 'register', 'verify', 'forgot-password', 'reset-password'].map((name) => ({ path: `/${name}`, name, component: AuthView })),
+    { path: '/invite/:eventId', name: 'invite', component: InvitationView },
     {
       path: '/', component: AccountShell, meta: { authenticated: true }, children: [
         { path: 'events', name: 'events', component: EventsView },

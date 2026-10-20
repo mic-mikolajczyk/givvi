@@ -24,6 +24,7 @@ from givvi.accounts.security import now
 from givvi.accounts.security import utc
 from givvi.models import AccountToken
 from givvi.models import EmailMessage
+from givvi.models import Event
 from givvi.models import LoginSession
 from givvi.models import RateBucket
 
@@ -35,6 +36,14 @@ RETRY_BASE_SECONDS = 30
 
 def account_link_is_active(engine: Engine, payload: dict) -> bool:
     link = urlsplit(payload["body"].splitlines()[-1])
+    if link.path.startswith("/invite/"):
+        event_id = link.path.removeprefix("/invite/")
+        token = parse_qs(link.fragment).get("token", [""])[0]
+        with Session(engine) as database:
+            event = database.get(Event, event_id)
+            if not event or not token or event.drawing_enabled or event.archived or event.cancelled:
+                return False
+            return event.invite_token_hash == digest(token)
     if link.path not in ("/verify", "/reset-password"):
         return True
     token = parse_qs(link.fragment).get("token", [""])[0]
@@ -78,8 +87,10 @@ def deliver_pending(app: Flask, sender: Callable[[dict], None] | None = None, li
                     EmailMessage.failed_at.is_(None),
                     EmailMessage.available_at <= now(),
                     EmailMessage.expires_at > now(),
-                    or_(EmailMessage.lease_until.is_(None),
-                    EmailMessage.lease_until <= now()),
+                    or_(
+                        EmailMessage.lease_until.is_(None),
+                        EmailMessage.lease_until <= now(),
+                    ),
                 ).order_by(EmailMessage.available_at).with_for_update(skip_locked=True).limit(1))
                 if not record:
                     break

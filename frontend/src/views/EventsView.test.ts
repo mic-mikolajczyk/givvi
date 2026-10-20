@@ -7,8 +7,14 @@ import { messages } from '../i18n'
 import EventsView from './EventsView.vue'
 import EventDetailView from './EventDetailView.vue'
 
-const { ApiError, request } = vi.hoisted(() => ({
+const { ApiError, currentUser, publicRequest, refreshUser, request } = vi.hoisted(() => ({
   request: vi.fn(),
+  publicRequest: vi.fn(),
+  refreshUser: vi.fn(),
+  currentUser: {
+    __v_isRef: true,
+    value: null as null | { id: string; name: string; email: string; language: 'en' | 'pl'; pending_email: null },
+  },
   ApiError: class extends Error {
     code: string
     constructor(code: string) {
@@ -17,7 +23,7 @@ const { ApiError, request } = vi.hoisted(() => ({
     }
   },
 }))
-vi.mock('../api', () => ({ request, ApiError }))
+vi.mock('../api', () => ({ request, publicRequest, refreshUser, currentUser, ApiError }))
 
 const event = {
   id: 'event-1', name: 'Winter exchange', exchange_date: '2026-12-20', exchange_time: null,
@@ -29,6 +35,10 @@ const event = {
 describe('event management views', () => {
   beforeEach(() => {
     request.mockReset()
+    publicRequest.mockReset()
+    refreshUser.mockReset()
+    currentUser.value = null
+    sessionStorage.clear()
   })
 
   it('creates an event and opens its detail view', async () => {
@@ -179,6 +189,175 @@ describe('event management views', () => {
     expect(request).toHaveBeenCalledWith('/events?page=2&page_size=50')
     expect(wrapper.text()).toContain('Second exchange')
     expect(wrapper.get('[aria-label="Event pages"]').text()).toContain('2 / 2')
+    wrapper.unmount()
+  })
+
+  it('shows only roster availability and preserves the invite token for sign-in', async () => {
+    const { default: InvitationView } = await import('./InvitationView.vue')
+    refreshUser.mockRejectedValue(new ApiError('unauthenticated'))
+    publicRequest.mockResolvedValue({ invitation: {
+      event_id: 'event-1', participants: [
+        { id: 'participant-1', name: 'Morgan', available: true },
+        { id: 'participant-2', name: 'Riley', available: false },
+      ],
+    } })
+    const router = createRouter({ history: createMemoryHistory(), routes: [
+      { path: '/', component: { template: '<div />' } },
+      { path: '/invite/:eventId', component: InvitationView },
+      { path: '/login', component: { template: '<div />' } },
+      { path: '/register', component: { template: '<div />' } },
+    ] })
+    await router.push('/invite/event-1#token=fragment-secret')
+    await router.isReady()
+    const wrapper = mount({ template: '<RouterView />' }, {
+      global: { plugins: [router, createI18n({ legacy: false, locale: 'en', messages })] },
+    })
+    await flushPromises()
+
+    expect(sessionStorage.getItem('givvi-invite-event-1')).toBe('fragment-secret')
+    expect(publicRequest).toHaveBeenCalledWith('/events/event-1/invitation-preview', { token: 'fragment-secret' })
+    expect(wrapper.text()).toContain('Morgan')
+    expect(wrapper.text()).toContain('Unavailable')
+    expect(wrapper.text()).not.toContain('Winter exchange')
+    expect(wrapper.find('button.primary-button').exists()).toBe(false)
+    await wrapper.get('a[href="/login?next=/invite/event-1"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/login')
+    wrapper.unmount()
+  })
+
+  it('claims an available roster name and enters the authorized event view', async () => {
+    const { default: InvitationView } = await import('./InvitationView.vue')
+    currentUser.value = {
+      id: 'user-1', name: 'Morgan', email: 'morgan@example.com', language: 'en', pending_email: null,
+    }
+    refreshUser.mockResolvedValue(currentUser.value)
+    publicRequest.mockResolvedValue({ invitation: {
+      event_id: 'event-1', participants: [{ id: 'participant-1', name: 'Morgan', available: true }],
+    } })
+    request.mockResolvedValue({ code: 'claim_completed' })
+    const router = createRouter({ history: createMemoryHistory(), routes: [
+      { path: '/', component: { template: '<div />' } },
+      { path: '/invite/:eventId', component: InvitationView },
+      { path: '/events/:eventId', component: { template: '<div />' } },
+    ] })
+    await router.push('/invite/event-1#token=fragment-secret')
+    await router.isReady()
+    const wrapper = mount({ template: '<RouterView />' }, {
+      global: { plugins: [router, createI18n({ legacy: false, locale: 'en', messages })] },
+    })
+    await flushPromises()
+
+    await wrapper.get('button').trigger('click')
+    await flushPromises()
+
+    expect(request).toHaveBeenCalledWith('/events/event-1/claim', {
+      participant_id: 'participant-1', token: 'fragment-secret',
+    })
+    expect(sessionStorage.getItem('givvi-invite-event-1')).toBeNull()
+    expect(router.currentRoute.value.path).toBe('/events/event-1')
+    wrapper.unmount()
+  })
+
+  it('refreshes available names after another user wins the claim race', async () => {
+    const { default: InvitationView } = await import('./InvitationView.vue')
+    currentUser.value = {
+      id: 'user-1', name: 'Morgan', email: 'morgan@example.com', language: 'en', pending_email: null,
+    }
+    refreshUser.mockResolvedValue(currentUser.value)
+    publicRequest
+      .mockResolvedValueOnce({ invitation: {
+        event_id: 'event-1', participants: [{ id: 'participant-1', name: 'Morgan', available: true }],
+      } })
+      .mockResolvedValueOnce({ invitation: {
+        event_id: 'event-1', participants: [{ id: 'participant-1', name: 'Morgan', available: false }],
+      } })
+    request.mockRejectedValue(new ApiError('entry_unavailable'))
+    const router = createRouter({ history: createMemoryHistory(), routes: [
+      { path: '/', component: { template: '<div />' } },
+      { path: '/invite/:eventId', component: InvitationView },
+      { path: '/events/:eventId', component: { template: '<div />' } },
+    ] })
+    await router.push('/invite/event-1#token=fragment-secret')
+    await router.isReady()
+    const wrapper = mount({ template: '<RouterView />' }, {
+      global: { plugins: [router, createI18n({ legacy: false, locale: 'en', messages })] },
+    })
+    await flushPromises()
+
+    await wrapper.get('button.primary-button').trigger('click')
+    await flushPromises()
+
+    expect(publicRequest).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('button.primary-button').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Unavailable')
+    expect(wrapper.text()).toContain('That roster entry was just claimed.')
+    wrapper.unmount()
+  })
+
+  it('lets the admin send invitations, share the link, and release a mistaken claim', async () => {
+    const claimedEvent = {
+      ...event,
+      participants: [{ id: 'participant-1', name: 'Morgan', claimed: true }],
+    }
+    const activeLink = 'http://givvi.test/invite/event-1#token=secret'
+    request.mockImplementation((path: string, body?: object, _retryCsrf?: boolean, method?: string) => {
+      if (path === '/events/event-1' && !body) return Promise.resolve({ event: claimedEvent })
+      if (path === '/events/event-1/invite-link' && !body) return Promise.resolve({ link: activeLink })
+      if (path === '/events/event-1/invitations') return Promise.resolve({ code: 'invitation_queued' })
+      if (path.endsWith('/participants/participant-1/claim') && method === 'DELETE') {
+        return Promise.resolve({ code: 'claim_released' })
+      }
+      return Promise.reject(new Error(`Unexpected request: ${path}`))
+    })
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const router = createRouter({ history: createMemoryHistory(), routes: [
+      { path: '/', component: { template: '<div />' } },
+      { path: '/events', component: { template: '<div />' } },
+      { path: '/events/:eventId', component: EventDetailView },
+    ] })
+    await router.push('/events/event-1')
+    await router.isReady()
+    const wrapper = mount({ template: '<RouterView />' }, {
+      global: { plugins: [router, createI18n({ legacy: false, locale: 'en', messages })] },
+    })
+    await flushPromises()
+
+    expect((wrapper.get('input[readonly]').element as HTMLInputElement).value).toBe(activeLink)
+    await wrapper.get('input[name="invite_email"]').setValue('guest@example.com')
+    await wrapper.get('form.invitation-email-form').trigger('submit')
+    await flushPromises()
+    await wrapper.get('button[aria-label="Release mistaken claim Morgan"]').trigger('click')
+    await flushPromises()
+
+    expect(request).toHaveBeenCalledWith('/events/event-1/invitations', { email: 'guest@example.com' })
+    expect(request).toHaveBeenCalledWith('/events/event-1/participants/participant-1/claim', {}, true, 'DELETE')
+    expect(wrapper.text()).toContain('Not claimed')
+    wrapper.unmount()
+  })
+
+  it('allows a participant to retrieve the active share link without admin controls', async () => {
+    const memberEvent = { ...event, is_admin: false }
+    request.mockImplementation((path: string) => {
+      if (path === '/events/event-1') return Promise.resolve({ event: memberEvent })
+      if (path === '/events/event-1/invite-link') return Promise.resolve({ link: 'active-link' })
+      return Promise.reject(new Error(`Unexpected request: ${path}`))
+    })
+    const router = createRouter({ history: createMemoryHistory(), routes: [
+      { path: '/', component: { template: '<div />' } },
+      { path: '/events', component: { template: '<div />' } },
+      { path: '/events/:eventId', component: EventDetailView },
+    ] })
+    await router.push('/events/event-1')
+    await router.isReady()
+    const wrapper = mount({ template: '<RouterView />' }, {
+      global: { plugins: [router, createI18n({ legacy: false, locale: 'en', messages })] },
+    })
+    await flushPromises()
+
+    expect((wrapper.get('input[readonly]').element as HTMLInputElement).value).toBe('active-link')
+    expect(wrapper.find('form.invitation-email-form').exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="Revoke link"]').exists()).toBe(false)
     wrapper.unmount()
   })
 })

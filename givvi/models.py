@@ -91,6 +91,7 @@ class Event(Base):
         CheckConstraint("currency IN ('EUR', 'PLN')", name="event_currency"),
         CheckConstraint("budget IS NULL OR (budget >= 0 AND budget <= 999999.99)", name="event_budget_range"),
         CheckConstraint("NOT drawing_enabled OR drawing_ever_enabled", name="event_drawing_history"),
+        UniqueConstraint("invite_token_hash", name="event_invite_token_hash"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
@@ -107,6 +108,8 @@ class Event(Base):
     drawing_ever_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     archived: Mapped[bool] = mapped_column(Boolean, default=False)
     cancelled: Mapped[bool] = mapped_column(Boolean, default=False)
+    invite_token_hash: Mapped[str | None] = mapped_column(String(64))
+    invite_token_encrypted: Mapped[str | None] = mapped_column(String(512))
 
 
 class EventParticipant(Base):

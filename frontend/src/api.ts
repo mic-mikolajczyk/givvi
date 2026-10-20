@@ -61,22 +61,26 @@ export async function request<T = Record<string, unknown>>(
   body?: object,
   retryCsrf = true,
   method: 'POST' | 'PATCH' | 'DELETE' = 'POST',
+  csrfRequired = true,
 ): Promise<T> {
   try {
-    if (body) await ensureCsrf()
+    if (body && csrfRequired) await ensureCsrf()
     const response = await fetch(`/api${path}`, {
       method: body ? method : 'GET',
       credentials: 'same-origin',
       cache: 'no-store',
       signal: AbortSignal.timeout(10000),
-      headers: body ? { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken } : {},
+      headers: body ? {
+        'Content-Type': 'application/json',
+        ...(csrfRequired ? { 'X-CSRF-Token': csrfToken } : {}),
+      } : {},
       body: body ? JSON.stringify(body) : undefined,
     })
     const payload = await response.json()
     if (!response.ok) {
-      if (payload.code === 'csrf_invalid' && body && retryCsrf) {
+      if (payload.code === 'csrf_invalid' && body && retryCsrf && csrfRequired) {
         csrfToken = ''
-        return await request<T>(path, body, false, method)
+        return await request<T>(path, body, false, method, csrfRequired)
       }
       if (payload.code === 'unauthenticated') clearSession()
       throw new ApiError(payload.code || 'internal_error', payload.field_errors || {}, payload.request_id || '')
@@ -87,6 +91,10 @@ export async function request<T = Record<string, unknown>>(
     if (error instanceof ApiError) throw error
     throw new ApiError('service_unavailable')
   }
+}
+
+export function publicRequest<T = Record<string, unknown>>(path: string, body: object): Promise<T> {
+  return request<T>(path, body, false, 'POST', false)
 }
 
 export async function refreshUser() {

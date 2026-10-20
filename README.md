@@ -10,7 +10,7 @@ Project verifies and indirectale measure how does AI affect software development
 
 ## Development Status
 
-Phase 0 and Phase 1 are verified. Phase 2 adds event creation, listing, editing, and organizer-managed rosters. Registration signs users in immediately without sending a verification email; password recovery and email-change confirmation remain supported. Invitations, claims, wishlists, and drawing are later-phase work. Each phase is reviewed by the user before the next begins.
+Phases 0-2 are verified. Phase 3 implements revocable event invitations and self-service roster claims and is ready for review. Registration signs users in immediately without sending a verification email; password recovery and email-change confirmation remain supported. Wishlist and drawing features remain later-phase work. Each phase is reviewed by the user before the next begins.
 
 - [Product specification](docs/spec.md)
 - [Delivery plan](docs/plan.md)
@@ -113,7 +113,16 @@ Screenshots and failure traces are written under the ignored frontend test-resul
 3. Add, rename, and remove unclaimed roster entries. The organizer is not automatically enrolled; each added entry remains marked as unclaimed.
 4. Sign in with a different account and open the event URL directly. The event must remain inaccessible, and only its admin can edit details or the roster.
 5. Review upcoming, ongoing, and past grouping against the event's time zone, then check the layout on desktop and a narrow mobile viewport.
-6. Invitations and claims are not part of this phase; use the delivery plan checkpoint to review Phase 2 before authorizing Phase 3.
+6. Review the Phase 2 checkpoint in the delivery plan before continuing to Phase 3.
+
+## Phase 3 Review
+
+1. As an event admin, prepare several roster entries, create an invitation link, and send an email invitation. Confirm the email uses the recipient's language when known and English otherwise.
+2. Open the invite link in a signed-out browser. Before signing in, it should show only roster names and availability; the token should disappear from the address bar and remain usable through registration or login.
+3. Claim an available roster name. The browser should open the event only after the claim succeeds; another account cannot claim the same entry, and one account cannot claim a second entry.
+4. As an accepted participant, copy the active invitation link. As the admin, regenerate or revoke it and confirm the old link no longer previews or claims.
+5. As the admin, release a mistaken claim. Confirm that participant loses event access and can claim a different available roster entry.
+6. Run the PostgreSQL integration checks for migrations, competing claims, and claim-versus-roster-removal. Review the Phase 3 checkpoint in the delivery plan before authorizing Phase 4. Claim-versus-draw race coverage is a Phase 5.1b gate when drawing is implemented.
 
 ## Upgrading Existing Development Data
 

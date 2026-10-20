@@ -93,6 +93,11 @@ h1 { font-size: 24px; font-weight: 700; margin: 0 0 24px; }
 .event-statuses { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .back-link { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; color: var(--accent); text-underline-offset: 4px; }
 .detail-form, .detail-summary { margin-top: 20px; }
+.invitation-section { margin-top: 32px; padding: 22px 0; border-block: 1px solid var(--border); }
+.invitation-email-form { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+.invite-link-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.invite-link-row input { flex: 1; min-width: 0; min-height: 46px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 4px; background: #fff; font: inherit; }
+.invite-link-row input[readonly] { color: #58655f; }
 .event-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; margin: 0; }
 .event-facts dt { color: #58655f; font-size: 13px; }
 .event-facts dd { margin: 4px 0 0; overflow-wrap: anywhere; white-space: pre-line; }
@@ -106,6 +111,12 @@ h1 { font-size: 24px; font-weight: 700; margin: 0 0 24px; }
 .claim-state.is-claimed { color: var(--accent); }
 .danger-button { color: var(--danger); }
 .roster-empty { color: #58655f; }
+.invitation-main { max-width: 560px; }
+.invitation-intro { color: #58655f; }
+.invitation-roster { margin: 24px 0; padding: 0; list-style: none; border-top: 1px solid var(--border); }
+.invitation-roster li { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 64px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.invitation-roster li > span:first-child { display: flex; align-items: center; gap: 10px; min-width: 0; overflow-wrap: anywhere; }
+.invitation-auth-links a { display: inline-flex; align-items: center; gap: 8px; }
 @media (max-width: 640px) {
   .view-heading { align-items: flex-start; }
   .create-event-button { max-width: 52%; }
@@ -115,5 +126,8 @@ h1 { font-size: 24px; font-weight: 700; margin: 0 0 24px; }
   .roster-row { flex-wrap: wrap; }
   .roster-name { flex-basis: calc(100% - 56px); }
   .claim-state { margin-left: 28px; }
+  .invite-link-row { flex-wrap: wrap; }
+  .invite-link-row input { flex-basis: 100%; }
+  .invitation-roster li { align-items: flex-start; flex-wrap: wrap; }
 }
 

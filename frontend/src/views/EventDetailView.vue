@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowLeft, Pencil, Plus, Save, Trash2, UserRound, X } from '@lucide/vue'
+import { ArrowLeft, Copy, Mail, Pencil, Plus, Save, Trash2, Unlink, UserRound, X } from '@lucide/vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
@@ -15,6 +15,8 @@ const editingDetails = ref(false)
 const error = ref('')
 const notice = ref('')
 const participantName = ref('')
+const inviteEmail = ref('')
+const inviteLink = ref('')
 const editingParticipant = ref('')
 const editingName = ref('')
 const form = reactive({
@@ -44,10 +46,23 @@ async function loadEvent() {
   try {
     const payload = await request<{ event: EventRecord }>(`/events/${eventId.value}`)
     applyEvent(payload.event)
+    await loadInviteLink()
   } catch (failure) {
     error.value = failure instanceof ApiError ? failure.code : 'service_unavailable'
   } finally {
     loading.value = false
+  }
+}
+
+async function loadInviteLink() {
+  inviteLink.value = ''
+  if (readOnly.value) return
+  try {
+    const payload = await request<{ link: string }>(`/events/${eventId.value}/invite-link`)
+    inviteLink.value = payload.link
+  } catch (failure) {
+    if (failure instanceof ApiError && ['invite_link_missing', 'not_found'].includes(failure.code)) return
+    error.value = failure instanceof ApiError ? failure.code : 'service_unavailable'
   }
 }
 
@@ -135,29 +150,122 @@ async function removeParticipant(participant: EventParticipant) {
   }
 }
 
+async function updateInviteLink() {
+  error.value = ''
+  try {
+    const payload = await request<{ link: string }>(`/events/${eventId.value}/invite-link`, {}, true, 'POST')
+    inviteLink.value = payload.link
+    notice.value = 'invite_link_created'
+  } catch (failure) {
+    error.value = failure instanceof ApiError ? failure.code : 'service_unavailable'
+  }
+}
+
+async function revokeInviteLink() {
+  if (!window.confirm(t('confirmRevokeInviteLink'))) return
+  try {
+    await request(`/events/${eventId.value}/invite-link`, {}, true, 'DELETE')
+    inviteLink.value = ''
+    notice.value = 'invite_link_revoked'
+    error.value = ''
+  } catch (failure) {
+    error.value = failure instanceof ApiError ? failure.code : 'service_unavailable'
+  }
+}
+
+async function copyInviteLink() {
+  try {
+    await navigator.clipboard.writeText(inviteLink.value)
+    notice.value = 'invite_link_copied'
+    error.value = ''
+  } catch {
+    error.value = 'clipboard_unavailable'
+  }
+}
+
+async function sendInvitation() {
+  try {
+    await request(`/events/${eventId.value}/invitations`, { email: inviteEmail.value })
+    inviteEmail.value = ''
+    notice.value = 'invitation_queued'
+    error.value = ''
+  } catch (failure) {
+    error.value = failure instanceof ApiError ? failure.code : 'service_unavailable'
+  }
+}
+
+async function releaseClaim(participant: EventParticipant) {
+  if (!window.confirm(t('confirmReleaseClaim'))) return
+  try {
+    await request(`/events/${eventId.value}/participants/${participant.id}/claim`, {}, true, 'DELETE')
+    participant.claimed = false
+    notice.value = 'claim_released'
+    error.value = ''
+  } catch (failure) {
+    error.value = failure instanceof ApiError ? failure.code : 'service_unavailable'
+  }
+}
+
 watch(eventId, loadEvent, { immediate: true })
 </script>
 
 <template>
   <section class="event-detail-view">
-    <RouterLink class="back-link" to="/events">
-      <ArrowLeft :size="18" aria-hidden="true" />{{ t('backToEvents') }}
+    <RouterLink
+      class="back-link"
+      to="/events"
+    >
+      <ArrowLeft
+        :size="18"
+        aria-hidden="true"
+      />{{ t('backToEvents') }}
     </RouterLink>
-    <p v-if="loading" class="empty-state" role="status">{{ t('loading') }}</p>
+    <p
+      v-if="loading"
+      class="empty-state"
+      role="status"
+    >
+      {{ t('loading') }}
+    </p>
     <template v-else-if="event">
       <div class="view-heading event-detail-heading">
         <div>
-          <p class="eyebrow">{{ t('eventDetails') }}</p>
-          <h1 tabindex="-1">{{ event.name }}</h1>
+          <p class="eyebrow">
+            {{ t('eventDetails') }}
+          </p>
+          <h1 tabindex="-1">
+            {{ event.name }}
+          </h1>
         </div>
         <div class="event-statuses">
-          <span v-if="event.cancelled" class="state-label cancelled-state">{{ t('cancelled') }}</span>
-          <span v-else-if="event.archived" class="state-label">{{ t('archived') }}</span>
-          <span v-if="event.drawing_enabled" class="state-label">{{ t('drawingEnabled') }}</span>
+          <span
+            v-if="event.cancelled"
+            class="state-label cancelled-state"
+          >{{ t('cancelled') }}</span>
+          <span
+            v-else-if="event.archived"
+            class="state-label"
+          >{{ t('archived') }}</span>
+          <span
+            v-if="event.drawing_enabled"
+            class="state-label"
+          >{{ t('drawingEnabled') }}</span>
         </div>
       </div>
-      <p v-if="error" class="feedback error" role="alert">{{ t(`errors.${error}`) }}</p>
-      <p v-if="notice" class="feedback success" role="status">{{ t(`notices.${notice}`) }}</p>
+      <p
+        v-if="error"
+        class="feedback error"
+        role="alert"
+      >
+        {{ t(`errors.${error}`) }}
+      </p>
+      <p
+        v-if="notice"
+        class="feedback success"
+        role="status"
+      >
+        {{ t(`notices.${notice}`) }}
+      </p>
 
       <section v-if="!editingDetails" class="event-form detail-summary">
         <div class="section-heading">
@@ -201,6 +309,93 @@ watch(eventId, loadEvent, { immediate: true })
         </fieldset>
       </form>
 
+      <section
+        v-if="!readOnly"
+        class="invitation-section"
+        aria-labelledby="invitation-heading"
+      >
+        <div class="section-heading">
+          <h2 id="invitation-heading">
+            {{ t('shareInviteLink') }}
+          </h2>
+          <button
+            v-if="event.is_admin"
+            class="secondary-button"
+            type="button"
+            @click="updateInviteLink"
+          >
+            {{ inviteLink ? t('regenerateInviteLink') : t('generateInviteLink') }}
+          </button>
+        </div>
+        <div
+          v-if="inviteLink"
+          class="invite-link-row"
+        >
+          <label
+            class="sr-only"
+            :for="`invite-link-${event.id}`"
+          >{{ t('shareInviteLink') }}</label>
+          <input
+            :id="`invite-link-${event.id}`"
+            :value="inviteLink"
+            readonly
+          >
+          <button
+            class="icon-button"
+            type="button"
+            :aria-label="t('copyInviteLink')"
+            :title="t('copyInviteLink')"
+            @click="copyInviteLink"
+          >
+            <Copy
+              :size="18"
+              aria-hidden="true"
+            />
+          </button>
+          <button
+            v-if="event.is_admin"
+            class="icon-button danger-button"
+            type="button"
+            :aria-label="t('revokeInviteLink')"
+            :title="t('revokeInviteLink')"
+            @click="revokeInviteLink"
+          >
+            <Unlink
+              :size="18"
+              aria-hidden="true"
+            />
+          </button>
+        </div>
+        <form
+          v-if="event.is_admin"
+          class="invitation-email-form"
+          @submit.prevent="sendInvitation"
+        >
+          <label :for="`invite-email-${event.id}`">{{ t('inviteByEmail') }}</label>
+          <div class="invite-link-row">
+            <input
+              :id="`invite-email-${event.id}`"
+              v-model="inviteEmail"
+              type="email"
+              name="invite_email"
+              maxlength="254"
+              autocomplete="email"
+              required
+              :placeholder="t('invitationEmail')"
+            >
+            <button
+              class="primary-button"
+              type="submit"
+            >
+              <Mail
+                :size="18"
+                aria-hidden="true"
+              />{{ t('sendInvitation') }}
+            </button>
+          </div>
+        </form>
+      </section>
+
       <section class="roster-section">
         <div class="section-heading"><h2>{{ t('roster') }}</h2><span>{{ event.participants.length }}/100</span></div>
         <form v-if="event.is_admin && !readOnly" class="roster-add-form" @submit.prevent="addParticipant">
@@ -224,6 +419,16 @@ watch(eventId, loadEvent, { immediate: true })
             <template v-else>
               <span class="roster-name"><UserRound :size="18" aria-hidden="true" />{{ participant.name }}</span>
               <span :class="['claim-state', participant.claimed ? 'is-claimed' : '']">{{ participant.claimed ? t('claimed') : t('notClaimed') }}</span>
+              <button
+                v-if="event.is_admin && !readOnly && participant.claimed"
+                class="icon-button danger-button"
+                type="button"
+                :aria-label="`${t('releaseClaim')} ${participant.name}`"
+                :title="t('releaseClaim')"
+                @click="releaseClaim(participant)"
+              >
+                <X :size="18" aria-hidden="true" />
+              </button>
               <button v-if="event.is_admin && !readOnly" class="icon-button" type="button" :aria-label="`${t('rename')} ${participant.name}`" :title="t('rename')" @click="beginRename(participant)">
                 <Pencil :size="18" aria-hidden="true" />
               </button>
