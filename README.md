@@ -109,7 +109,7 @@ Screenshots and failure traces are written under the ignored frontend test-resul
 ## Phase 2 Review
 
 1. Register or sign in at http://127.0.0.1:5173/events and create an event with a name, date, and time zone. English defaults to EUR; Polish defaults to PLN.
-2. Open the event, edit its details, and confirm the selected currency remains unchanged if you later change your interface language.
+2. Open the event. Details are read-only until you select Edit event; Save applies changes and Cancel discards them. Confirm the selected currency remains unchanged if you later change your interface language.
 3. Add, rename, and remove unclaimed roster entries. The organizer is not automatically enrolled; each added entry remains marked as unclaimed.
 4. Sign in with a different account and open the event URL directly. The event must remain inaccessible, and only its admin can edit details or the roster.
 5. Review upcoming, ongoing, and past grouping against the event's time zone, then check the layout on desktop and a narrow mobile viewport.

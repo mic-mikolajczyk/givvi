@@ -6,11 +6,12 @@ import { useRoute } from 'vue-router'
 
 import { ApiError, request, type EventParticipant, type EventRecord } from '../api'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const route = useRoute()
 const event = ref<EventRecord | null>(null)
 const loading = ref(true)
 const saving = ref(false)
+const editingDetails = ref(false)
 const error = ref('')
 const notice = ref('')
 const participantName = ref('')
@@ -63,12 +64,28 @@ async function saveEvent() {
       budget: form.budget || null,
     }, true, 'PATCH')
     applyEvent(payload.event)
+    editingDetails.value = false
     notice.value = 'saved'
   } catch (failure) {
     error.value = failure instanceof ApiError ? failure.code : 'service_unavailable'
   } finally {
     saving.value = false
   }
+}
+
+function beginEdit() {
+  notice.value = ''
+  editingDetails.value = true
+}
+
+function cancelEdit() {
+  if (event.value) applyEvent(event.value)
+  error.value = ''
+  editingDetails.value = false
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat(locale.value, { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(`${value}T00:00:00Z`))
 }
 
 async function addParticipant() {
@@ -142,9 +159,26 @@ watch(eventId, loadEvent, { immediate: true })
       <p v-if="error" class="feedback error" role="alert">{{ t(`errors.${error}`) }}</p>
       <p v-if="notice" class="feedback success" role="status">{{ t(`notices.${notice}`) }}</p>
 
-      <form class="event-form detail-form" @submit.prevent="saveEvent">
-        <div class="section-heading"><h2>{{ t('eventDetails') }}</h2></div>
-        <fieldset :disabled="!event.is_admin || readOnly">
+      <section v-if="!editingDetails" class="event-form detail-summary">
+        <div class="section-heading">
+          <h2>{{ t('eventDetails') }}</h2>
+          <button v-if="event.is_admin && !readOnly" class="secondary-button edit-event-button" type="button" @click="beginEdit">
+            <Pencil :size="18" aria-hidden="true" />{{ t('editEvent') }}
+          </button>
+        </div>
+        <dl class="event-facts">
+          <div><dt>{{ t('exchangeDate') }}</dt><dd>{{ formatDate(event.exchange_date) }}</dd></div>
+          <div><dt>{{ t('exchangeTime') }}</dt><dd>{{ event.exchange_time || t('notSet') }}</dd></div>
+          <div><dt>{{ t('timeZone') }}</dt><dd>{{ event.time_zone }}</dd></div>
+          <div><dt>{{ t('budget') }}</dt><dd>{{ event.budget ? `${event.budget} ${event.currency}` : `${t('notSet')} (${event.currency})` }}</dd></div>
+          <div><dt>{{ t('location') }}</dt><dd>{{ event.location || t('notSet') }}</dd></div>
+          <div class="event-fact-wide"><dt>{{ t('description') }}</dt><dd>{{ event.description || t('notSet') }}</dd></div>
+        </dl>
+      </section>
+
+      <form v-else class="event-form detail-form" @submit.prevent="saveEvent">
+        <div class="section-heading"><h2>{{ t('editEvent') }}</h2></div>
+        <fieldset :disabled="saving">
           <label><span>{{ t('eventName') }}</span><input v-model="form.name" name="name" maxlength="120" required></label>
           <div class="event-form-grid">
             <label><span>{{ t('exchangeDate') }}</span><input v-model="form.exchange_date" name="exchange_date" type="date" required></label>
@@ -158,9 +192,12 @@ watch(eventId, loadEvent, { immediate: true })
             <label><span>{{ t('location') }}</span><input v-model="form.location" name="location" maxlength="255"></label>
           </div>
           <label><span>{{ t('description') }}</span><textarea v-model="form.description" name="description" maxlength="2000" rows="3" /></label>
-          <button v-if="event.is_admin && !readOnly" class="primary-button" type="submit" :disabled="saving">
-            <Save :size="18" aria-hidden="true" />{{ saving ? t('working') : t('saveEvent') }}
-          </button>
+          <div class="form-actions">
+            <button class="primary-button" type="submit">
+              <Save :size="18" aria-hidden="true" />{{ saving ? t('working') : t('saveEvent') }}
+            </button>
+            <button class="secondary-button cancel-edit-button" type="button" @click="cancelEdit">{{ t('cancel') }}</button>
+          </div>
         </fieldset>
       </form>
 
@@ -177,8 +214,8 @@ watch(eventId, loadEvent, { immediate: true })
             <template v-if="editingParticipant === participant.id">
               <label class="sr-only" :for="`rename-${participant.id}`">{{ t('participantName') }}</label>
               <input :id="`rename-${participant.id}`" v-model="editingName" maxlength="120">
-              <button class="icon-button" type="button" :aria-label="t('saveEvent')" :title="t('saveEvent')" @click="saveRename(participant)">
-                <Pencil :size="18" aria-hidden="true" />
+              <button class="icon-button" type="button" :aria-label="t('save')" :title="t('save')" @click="saveRename(participant)">
+                <Save :size="18" aria-hidden="true" />
               </button>
               <button class="icon-button" type="button" :aria-label="t('cancel')" :title="t('cancel')" @click="editingParticipant = ''">
                 <X :size="18" aria-hidden="true" />

@@ -21,6 +21,7 @@ export const messages = {
     backToEvents: 'Back to events', loading: 'Loading', archived: 'Archived', cancelled: 'Cancelled',
     drawingEnabled: 'Drawing enabled', noParticipants: 'No roster entries yet',
     eventPages: 'Event pages', previousPage: 'Previous page', nextPage: 'Next page',
+    editEvent: 'Edit event', notSet: 'Not set',
     pages: { login: 'Sign in', register: 'Create account', verify: 'Confirm new email', 'forgot-password': 'Password recovery', 'reset-password': 'Reset password' },
     actions: { login: 'Sign in', register: 'Create account', verify: 'Confirm new email', 'forgot-password': 'Send reset link', 'reset-password': 'Set new password' },
     notices: {
@@ -66,6 +67,7 @@ export const messages = {
     backToEvents: 'Wróć do wydarzeń', loading: 'Ładowanie', archived: 'Zarchiwizowane', cancelled: 'Anulowane',
     drawingEnabled: 'Losowanie włączone', noParticipants: 'Brak osób na liście',
     eventPages: 'Strony wydarzeń', previousPage: 'Poprzednia strona', nextPage: 'Następna strona',
+    editEvent: 'Edytuj wydarzenie', notSet: 'Nie podano',
     pages: { login: 'Zaloguj się', register: 'Utwórz konto', verify: 'Potwierdź nowy email', 'forgot-password': 'Odzyskiwanie hasła', 'reset-password': 'Zresetuj hasło' },
     actions: { login: 'Zaloguj się', register: 'Utwórz konto', verify: 'Potwierdź nowy email', 'forgot-password': 'Wyślij link', 'reset-password': 'Ustaw nowe hasło' },
     notices: {

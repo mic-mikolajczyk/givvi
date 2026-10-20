@@ -92,7 +92,11 @@ h1 { font-size: 24px; font-weight: 700; margin: 0 0 24px; }
 .event-detail-heading { align-items: flex-start; margin-top: 20px; }
 .event-statuses { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .back-link { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; color: var(--accent); text-underline-offset: 4px; }
-.detail-form { margin-top: 20px; }
+.detail-form, .detail-summary { margin-top: 20px; }
+.event-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; margin: 0; }
+.event-facts dt { color: #58655f; font-size: 13px; }
+.event-facts dd { margin: 4px 0 0; overflow-wrap: anywhere; white-space: pre-line; }
+.event-fact-wide { grid-column: 1 / -1; }
 .roster-section { margin-top: 36px; }
 .roster-add-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; margin: 20px 0; }
 .roster-list { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--border); }
@@ -105,7 +109,7 @@ h1 { font-size: 24px; font-weight: 700; margin: 0 0 24px; }
 @media (max-width: 640px) {
   .view-heading { align-items: flex-start; }
   .create-event-button { max-width: 52%; }
-  .event-groups, .event-form-grid { grid-template-columns: minmax(0, 1fr); }
+  .event-groups, .event-form-grid, .event-facts { grid-template-columns: minmax(0, 1fr); }
   .event-form { padding: 18px; }
   .roster-add-form { grid-template-columns: minmax(0, 1fr); }
   .roster-row { flex-wrap: wrap; }

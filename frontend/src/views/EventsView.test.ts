@@ -98,6 +98,61 @@ describe('event management views', () => {
     wrapper.unmount()
   })
 
+  it('shows event details read-only until the admin chooses to edit', async () => {
+    const updated = { ...event, name: 'Renamed exchange' }
+    request.mockImplementation((path: string, body?: object) => {
+      if (path === '/events/event-1' && !body) return Promise.resolve({ event })
+      if (path === '/events/event-1' && body) return Promise.resolve({ event: updated })
+      return Promise.reject(new Error(`Unexpected request: ${path}`))
+    })
+    const router = createRouter({ history: createMemoryHistory(), routes: [
+      { path: '/events', component: { template: '<div />' } },
+      { path: '/events/:eventId', component: EventDetailView },
+    ] })
+    await router.push('/events/event-1')
+    await router.isReady()
+    const wrapper = mount({ template: '<RouterView />' }, {
+      global: { plugins: [router, createI18n({ legacy: false, locale: 'en', messages })] },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('input[name="name"]').exists()).toBe(false)
+    await wrapper.get('button.edit-event-button').trigger('click')
+    await wrapper.get('input[name="name"]').setValue('Renamed exchange')
+    await wrapper.get('form.detail-form').trigger('submit')
+    await flushPromises()
+
+    expect(request).toHaveBeenCalledWith('/events/event-1', expect.objectContaining({ name: 'Renamed exchange' }), true, 'PATCH')
+    expect(wrapper.find('input[name="name"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Renamed exchange')
+    wrapper.unmount()
+  })
+
+  it('discards unsaved detail changes on cancel', async () => {
+    request.mockImplementation((path: string, body?: object) => {
+      if (path === '/events/event-1' && !body) return Promise.resolve({ event })
+      return Promise.reject(new Error(`Unexpected request: ${path}`))
+    })
+    const router = createRouter({ history: createMemoryHistory(), routes: [
+      { path: '/events', component: { template: '<div />' } },
+      { path: '/events/:eventId', component: EventDetailView },
+    ] })
+    await router.push('/events/event-1')
+    await router.isReady()
+    const wrapper = mount({ template: '<RouterView />' }, {
+      global: { plugins: [router, createI18n({ legacy: false, locale: 'en', messages })] },
+    })
+    await flushPromises()
+
+    await wrapper.get('button.edit-event-button').trigger('click')
+    await wrapper.get('input[name="name"]').setValue('Unsaved name')
+    await wrapper.get('button.cancel-edit-button').trigger('click')
+    await wrapper.get('button.edit-event-button').trigger('click')
+
+    expect((wrapper.get('input[name="name"]').element as HTMLInputElement).value).toBe('Winter exchange')
+    wrapper.unmount()
+  })
+
   it('loads the next page of events when requested', async () => {
     request.mockImplementation((path: string) => {
       if (path === '/events?page=1&page_size=50') {
