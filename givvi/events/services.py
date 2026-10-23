@@ -175,10 +175,8 @@ def enable_drawing(database: Session, event: Event) -> dict:
         return drawing_status(database, event, None)
 
     participants = roster(database, event.id, lock=True)
-    if len([participant for participant in participants if participant.user_id is not None]) < 3:
+    if len(participants) < 3:
         raise ApiError("not_enough_participants", 409)
-    if any(participant.user_id is None for participant in participants):
-        raise ApiError("participants_unclaimed", 409)
 
     recipients = list(participants)
     shuffle = current_app.config.get("DRAW_SHUFFLE", _secure_shuffle)
@@ -213,8 +211,8 @@ def drawing_status(database: Session, event: Event, user_id: str | None) -> dict
     ))
     if event.drawing_enabled and not draw:
         raise ApiError("draw_unavailable", 503)
-    claimed_count = database.scalar(select(func.count()).select_from(EventParticipant).where(
-        EventParticipant.event_id == event.id, EventParticipant.user_id.is_not(None),
+    participant_count = database.scalar(select(func.count()).select_from(EventParticipant).where(
+        EventParticipant.event_id == event.id,
     )) or 0
     is_admin = user_id is None or event.admin_id == user_id
     revealed_count: int | None = 0 if is_admin else None
@@ -234,7 +232,7 @@ def drawing_status(database: Session, event: Event, user_id: str | None) -> dict
             )) is not None
     return {
         "enabled": event.drawing_enabled,
-        "participant_count": claimed_count,
+        "participant_count": participant_count,
         "revealed_count": revealed_count,
         "has_revealed": has_revealed,
     }

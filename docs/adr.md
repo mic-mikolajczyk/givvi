@@ -58,13 +58,13 @@ Each record states context, decision/pattern, rationale and alternatives, implem
 
 **Status:** Implemented for Phase 5.
 
-**Context:** Every claimed participant must give and receive exactly once without self-pairing; custom exclusions are deferred.
+**Context:** Every roster entry must give and receive exactly once without self-pairing, even if the entry is unclaimed when drawing is enabled; custom exclusions are deferred.
 
 **Decision/strategy:** Use secure standard-library randomness to shuffle all recipients uniformly, rejecting permutations with fixed points. Validate the completed derangement before persistence.
 
 **Rationale/alternatives:** Rejection sampling is simple and yields uniform valid permutations for the small rosters in scope; its expected trial count stays small. A shuffled cycle would exclude valid multi-cycle assignments and change the distribution. Do not promise fresh pairings on reset or invent a general constraint solver.
 
-**Implementation:** Production uses `secrets.SystemRandom().shuffle`; tests inject controlled shuffles and never rely on statistical outcomes. Generation rejects fixed points with a bounded 1,000-attempt safeguard and aborts without partial assignments rather than introducing a biased fallback. `event_draws` retains generation/reset timestamps, while `event_assignments` enforces unique givers/recipients, same-event participant references, no-self checks, and per-assignment reveal timestamps. Commit all assignments with drawing state under ADR-004. Admin status exposes aggregate reveal counts only; the dedicated reveal endpoint loads only the requesting participant's recipient. Frontend animation never computes or downloads the complete mapping.
+**Implementation:** Eligibility requires at least three roster entries and does not depend on claims. Production uses `secrets.SystemRandom().shuffle`; tests inject controlled shuffles and never rely on statistical outcomes. Generation rejects fixed points with a bounded 1,000-attempt safeguard and aborts without partial assignments rather than introducing a biased fallback. `event_draws` retains generation/reset timestamps, while `event_assignments` enforces unique givers/recipients, same-event participant references, no-self checks, and per-assignment reveal timestamps. Commit all assignments with drawing state under ADR-004. An unclaimed entry is assigned as both giver and possible recipient, but only the account claiming a giver entry can reveal; claims remain locked until a pre-reveal reset. Admin status exposes aggregate reveal counts only; the dedicated reveal endpoint loads only the requesting participant's recipient. Frontend animation never computes or downloads the complete mapping.
 
 **Verification:** Parameterized invariants across roster sizes, deterministic controlled cases, failure rollback, and recipient-response privacy. Avoid flaky statistical tests as a correctness gate.
 

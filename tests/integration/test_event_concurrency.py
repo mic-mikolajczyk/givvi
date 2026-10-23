@@ -177,10 +177,14 @@ def test_claim_and_draw_generation_are_serialized(migrated_app) -> None:
         draw_status = draw_future.result()
         claim_status = claim_future.result()
 
-    assert (draw_status, claim_status) in ((200, 200), (409, 200))
+    assert draw_status == 200
+    assert claim_status in (200, 409)
     with Session(app.extensions["database"]) as database:
         event = database.get(Event, event_id)
-        assert event.drawing_enabled is (draw_status == 200)
+        assignments = database.scalars(select(EventAssignment).where(EventAssignment.event_id == event_id)).all()
+        assert event.drawing_enabled is True
+        assert {assignment.giver_participant_id for assignment in assignments} == set(participant_ids)
+        assert {assignment.recipient_participant_id for assignment in assignments} == set(participant_ids)
 
 
 def create_claimed_draw(app):
@@ -296,22 +300,31 @@ def test_roster_addition_and_draw_generation_are_serialized(migrated_app) -> Non
             "X-CSRF-Token": admin_csrf, "Origin": app.config["APP_ORIGIN"],
         }).status_code
 
-    def add_roster_entry() -> int:
+    def add_roster_entry() -> tuple[int, str | None]:
         barrier.wait(timeout=10)
-        return admin.post(f"/api/events/{event_id}/participants", json={"name": "New entry"}, headers={
+        response = admin.post(f"/api/events/{event_id}/participants", json={"name": "New entry"}, headers={
             "X-CSRF-Token": admin_csrf, "Origin": app.config["APP_ORIGIN"],
-        }).status_code
+        })
+        participant_id = response.json.get("participant", {}).get("id")
+        return response.status_code, participant_id
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         draw_future = executor.submit(enable_drawing)
         add_future = executor.submit(add_roster_entry)
         draw_status = draw_future.result()
-        add_status = add_future.result()
+        add_status, added_participant_id = add_future.result()
 
-    assert (draw_status, add_status) in ((200, 409), (409, 201))
+    assert draw_status == 200
+    assert add_status in (201, 409)
     with Session(app.extensions["database"]) as database:
         event = database.get(Event, event_id)
-        assert event.drawing_enabled is (draw_status == 200)
+        participants = set(database.scalars(select(EventParticipant.id).where(EventParticipant.event_id == event_id)))
+        assignments = database.scalars(select(EventAssignment).where(EventAssignment.event_id == event_id)).all()
+        assert event.drawing_enabled is True
+        assert {assignment.giver_participant_id for assignment in assignments} == participants
+        assert {assignment.recipient_participant_id for assignment in assignments} == participants
+        if add_status == 201:
+            assert added_participant_id in participants
 
 
 @pytest.mark.integration

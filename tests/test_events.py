@@ -393,7 +393,7 @@ def test_failed_draw_generation_rolls_back_without_partial_records(account_app) 
         assert database.query(EventAssignment).filter_by(event_id=event_id).count() == 0
 
 
-def test_drawing_requires_complete_roster_and_reset_preserves_draw_history(account_app) -> None:
+def test_drawing_includes_unclaimed_entries_and_reset_preserves_draw_history(account_app) -> None:
     admin = account_app.test_client()
     admin_csrf = register(admin, account_app, "draw-reset-admin@example.com")
     event_id = create_event(admin, account_app, admin_csrf).json["event"]["id"]
@@ -416,17 +416,20 @@ def test_drawing_requires_complete_roster_and_reset_preserves_draw_history(accou
         members.append((member, csrf))
 
     headers = {"X-CSRF-Token": admin_csrf, "Origin": account_app.config["APP_ORIGIN"]}
-    incomplete = admin.post(f"/api/events/{event_id}/drawing", json={}, headers=headers)
-    assert incomplete.status_code == 409
-    assert incomplete.json["code"] == "participants_unclaimed"
-
-    assert post(members[3][0], account_app, members[3][1], f"/api/events/{event_id}/claim", {
-        "participant_id": participant_ids[3], "token": token,
-    }).status_code == 200
     enabled = admin.post(f"/api/events/{event_id}/drawing", json={}, headers=headers)
     repeated_enable = admin.post(f"/api/events/{event_id}/drawing", json={}, headers=headers)
     assert enabled.status_code == repeated_enable.status_code == 200
     assert enabled.json == repeated_enable.json
+    assert enabled.json["drawing"]["participant_count"] == 4
+    assert enabled.json["drawing"]["revealed_count"] == 0
+    assert post(members[3][0], account_app, members[3][1], f"/api/events/{event_id}/claim", {
+        "participant_id": participant_ids[3], "token": token,
+    }).status_code == 409
+    with Session(account_app.extensions["database"]) as database:
+        assignments = database.query(EventAssignment).filter_by(event_id=event_id).all()
+        assert len(assignments) == 4
+        assert {assignment.giver_participant_id for assignment in assignments} == set(participant_ids)
+        assert {assignment.recipient_participant_id for assignment in assignments} == set(participant_ids)
 
     reset = admin.delete(f"/api/events/{event_id}/drawing", headers=headers)
 
@@ -440,10 +443,15 @@ def test_drawing_requires_complete_roster_and_reset_preserves_draw_history(accou
 
     added = post(admin, account_app, admin_csrf, f"/api/events/{event_id}/participants", {"name": "New member"})
     assert added.status_code == 201
-    assert admin.post(f"/api/events/{event_id}/drawing", json={}, headers=headers).status_code == 409
+    redrawn = admin.post(f"/api/events/{event_id}/drawing", json={}, headers=headers)
+    assert redrawn.status_code == 200
+    assert redrawn.json["drawing"]["participant_count"] == 5
+    with Session(account_app.extensions["database"]) as database:
+        assert database.query(EventDraw).filter_by(event_id=event_id).count() == 2
+        assert database.query(EventAssignment).filter_by(event_id=event_id).count() == 5
 
 
-def test_drawing_requires_at_least_three_claimed_participants(account_app) -> None:
+def test_drawing_requires_at_least_three_defined_entries(account_app) -> None:
     admin, admin_csrf, event_id, unused_participant_ids = create_claimed_event(account_app, 2, "draw-too-small")
 
     response = admin.post(f"/api/events/{event_id}/drawing", json={}, headers={
@@ -452,6 +460,58 @@ def test_drawing_requires_at_least_three_claimed_participants(account_app) -> No
 
     assert response.status_code == 409
     assert response.json["code"] == "not_enough_participants"
+
+
+def test_drawing_can_be_enabled_when_all_entries_are_unclaimed(account_app) -> None:
+    admin = account_app.test_client()
+    admin_csrf = register(admin, account_app, "all-unclaimed-admin@example.com")
+    event_id = create_event(admin, account_app, admin_csrf).json["event"]["id"]
+    participant_ids = []
+    for index in range(3):
+        response = post(admin, account_app, admin_csrf, f"/api/events/{event_id}/participants", {
+            "name": f"Unclaimed {index}",
+        })
+        participant_ids.append(response.json["participant"]["id"])
+
+    enabled = post(admin, account_app, admin_csrf, f"/api/events/{event_id}/drawing", {})
+
+    assert enabled.status_code == 200
+    assert enabled.json["drawing"]["participant_count"] == 3
+    with Session(account_app.extensions["database"]) as database:
+        assignments = database.query(EventAssignment).filter_by(event_id=event_id).all()
+    assert len(assignments) == 3
+    assert {assignment.giver_participant_id for assignment in assignments} == set(participant_ids)
+    assert {assignment.recipient_participant_id for assignment in assignments} == set(participant_ids)
+
+
+def test_claimed_participant_can_reveal_an_unclaimed_recipient(account_app) -> None:
+    admin = account_app.test_client()
+    admin_csrf = register(admin, account_app, "unclaimed-recipient-admin@example.com")
+    event_id = create_event(admin, account_app, admin_csrf).json["event"]["id"]
+    participant_ids = []
+    for index in range(3):
+        participant = post(admin, account_app, admin_csrf, f"/api/events/{event_id}/participants", {
+            "name": f"Member {index}",
+        })
+        participant_ids.append(participant.json["participant"]["id"])
+    link = post(admin, account_app, admin_csrf, f"/api/events/{event_id}/invite-link", {}).json["link"]
+    token = parse_qs(urlsplit(link).fragment)["token"][0]
+    member = account_app.test_client()
+    member_csrf = register(member, account_app, "unclaimed-recipient-member@example.com")
+    assert post(member, account_app, member_csrf, f"/api/events/{event_id}/claim", {
+        "participant_id": participant_ids[1], "token": token,
+    }).status_code == 200
+
+    def assign_member_to_unclaimed_recipient(recipients):
+        recipients[:] = [recipients[1], recipients[2], recipients[0]]
+
+    account_app.config["DRAW_SHUFFLE"] = assign_member_to_unclaimed_recipient
+    enabled = post(admin, account_app, admin_csrf, f"/api/events/{event_id}/drawing", {})
+    revealed = post(member, account_app, member_csrf, f"/api/events/{event_id}/reveal", {})
+
+    assert enabled.status_code == 200
+    assert revealed.status_code == 200
+    assert revealed.json["recipient"] == {"id": participant_ids[2], "name": "Member 2"}
 
 
 def test_revoked_invite_link_cannot_be_previewed_or_shared(account_app) -> None:

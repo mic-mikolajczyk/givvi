@@ -102,10 +102,11 @@ An account may claim at most one roster entry in an event, and a roster entry ma
 ## 7. Secret Santa Assignment
 
 - Drawing is disabled by default.
-- Drawing can be enabled only by the admin when at least three roster entries are claimed.
-- Enabling drawing creates a complete one-to-one assignment. No participant is assigned to themselves, and every participant is assigned exactly one recipient.
+- Drawing can be enabled by the admin when at least three roster entries exist, regardless of claim status.
+- Every roster entry is included in the complete one-to-one assignment, whether claimed or not. No entry is assigned to itself, and every entry is assigned exactly one recipient.
 - Assignments are generated once when drawing is enabled. Participants do not receive a new assignment by pressing the reveal control.
-- Each participant can reveal only their own assigned recipient, and only after drawing is enabled. Before reveal, the dashboard indicates that drawing is available; after reveal, it shows the assigned recipient instead of the reveal control.
+- An account that has claimed a roster entry can reveal only that entry's assigned recipient, and only after drawing is enabled. An unclaimed roster entry still gives and receives in the assignment, but has no account that can reveal its giver assignment.
+- Before reveal, a claimed participant's dashboard indicates that drawing is available; after reveal, it shows the assigned recipient instead of the reveal control.
 - The reveal may use a brief animation or delay, but assignment correctness and privacy must not depend on client-side behavior.
 - The admin can see reveal status but cannot see assignment recipients.
 - Resetting is an explicit admin action with a confirmation step. It is allowed only before any participant has revealed. Reset clears all assignments and permits roster changes. A new draw may produce the same pairings as a previous draw.
@@ -173,7 +174,7 @@ An account may claim at most one roster entry in an event, and a roster entry ma
 - A user can register and reach the dashboard already signed in, without receiving or opening a verification email. They can subsequently sign in, reset their password, manage their profile, and confirm email-address changes.
 - A user can create an event with the required name and date, add roster entries, and share or email invitations.
 - Invitees can sign in or register, claim unique roster entries, and access only events they belong to.
-- The admin cannot enable drawing with fewer than three claimed participants or with any unclaimed roster entry.
+- The admin cannot enable drawing with fewer than three roster entries. Claim status does not affect eligibility, and unclaimed entries remain part of the assignment.
 - A valid draw assigns every participant exactly one other participant, with no self-assignment or duplicate recipient.
 - Only a participant can reveal their own assignment. The admin cannot inspect recipient identities through the application.
 - An explicit reset is blocked after the first reveal; cancellation remains available to the admin.
@@ -197,3 +198,7 @@ The following defaults were approved before implementation. They refine the requ
 - Sessions expire after seven days, email-change confirmation tokens after 24 hours, and password-reset tokens after 30 minutes. Confirmation/reset tokens are single-use. Signup verification tokens are not issued. Invite links remain valid until revoked or regenerated, subject to event-state restrictions.
 - Account deletion removes personal profile/wishlist data and anonymizes historical roster names associated with the account. Retained identity labels become a neutral deleted-user label.
 - Backups expire within 30 days. Deletion records are reapplied when restoring backups before reopening access; immediate physical erasure from existing backups is not promised.
+
+## 15. Approved Phase 5 Clarification
+
+- Drawing requires at least three defined roster entries, not three claims. Every roster entry participates in the assignment even when it is unclaimed. Claiming and roster changes remain locked while drawing is enabled; therefore an entry unclaimed at enablement has no account that can reveal its giver assignment until the drawing is reset before any reveal.

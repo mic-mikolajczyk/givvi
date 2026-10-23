@@ -30,10 +30,10 @@ const form = reactive({
 })
 const eventId = computed(() => String(route.params.eventId || ''))
 const readOnly = computed(() => Boolean(event.value && (event.value.archived || event.value.cancelled || event.value.drawing_enabled)))
-const claimedCount = computed(() => event.value?.participants.filter((participant) => participant.claimed).length || 0)
+const rosterCount = computed(() => event.value?.participants.length || 0)
 const canEnableDrawing = computed(() => Boolean(
-  event.value?.is_admin && !event.value.drawing_enabled && claimedCount.value >= 3
-  && claimedCount.value === event.value.participants.length && !event.value.archived && !event.value.cancelled,
+  event.value?.is_admin && !event.value.drawing_enabled && rosterCount.value >= 3
+  && !event.value.archived && !event.value.cancelled,
 ))
 const canResetDrawing = computed(() => Boolean(
   event.value?.is_admin && drawingStatus.value?.enabled && drawingStatus.value.revealed_count === 0
@@ -44,7 +44,7 @@ function applyEvent(value: EventRecord) {
   event.value = value
   drawingStatus.value = {
     enabled: value.drawing_enabled,
-    participant_count: value.participants.filter((participant) => participant.claimed).length,
+    participant_count: value.participants.length,
     revealed_count: 0,
     has_revealed: false,
   }
@@ -496,7 +496,7 @@ watch(eventId, loadEvent, { immediate: true })
           v-if="!event.drawing_enabled"
           class="drawing-requirements"
         >
-          {{ t('claimedParticipantCount', { claimed: claimedCount, total: event.participants.length }) }}
+          {{ t('drawingRosterCount', { total: event.participants.length }) }}
           {{ t('drawingRequirements') }}
         </p>
         <p

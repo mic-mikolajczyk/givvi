@@ -100,11 +100,13 @@ for (const language of ['en', 'pl'] as const) {
     const copy = language === 'en' ? {
       signup: 'Create account', create: 'Create event', save: 'Save event', add: 'Add to roster',
       createLink: 'Create link', enable: 'Enable drawing', reset: 'Reset drawing',
-      reveal: 'Reveal your recipient', ownRecipient: 'Your gift recipient', progress: '3 of 3 recipients revealed',
+      reveal: 'Reveal your recipient', ownRecipient: 'Your gift recipient', progress: '2 of 3 recipients revealed',
+      rosterMessage: '3 roster entries will be included, regardless of claim status.',
     } : {
       signup: 'Utwórz konto', create: 'Utwórz wydarzenie', save: 'Zapisz wydarzenie', add: 'Dodaj do listy',
       createLink: 'Utwórz link', enable: 'Włącz losowanie', reset: 'Zresetuj losowanie',
-      reveal: 'Odkryj odbiorcę prezentu', ownRecipient: 'Osoba, którą obdarujesz', progress: 'Ujawniono 3 z 3 odbiorców',
+      reveal: 'Odkryj odbiorcę prezentu', ownRecipient: 'Osoba, którą obdarujesz', progress: 'Ujawniono 2 z 3 odbiorców',
+      rosterMessage: 'Losowanie obejmie wszystkie 3 wpisy, niezależnie od potwierdzenia udziału.',
     }
     const password = 'correct horse battery staple'
     const contexts = []
@@ -125,6 +127,7 @@ for (const language of ['en', 'pl'] as const) {
     const eventUrl = page.url()
 
     const rosterNames = ['Morgan', 'Riley', 'Taylor']
+    const claimedNames = rosterNames.slice(0, 2)
     for (const name of rosterNames) {
       await page.locator('input[name="participant_name"]').fill(name)
       await page.getByRole('button', { name: copy.add }).click()
@@ -134,7 +137,7 @@ for (const language of ['en', 'pl'] as const) {
     const invitationLink = await page.locator('input[readonly]').inputValue()
 
     const memberPages = []
-    for (const [index, name] of rosterNames.entries()) {
+    for (const [index, name] of claimedNames.entries()) {
       const context = await browser.newContext({ viewport: page.viewportSize() ?? { width: 1280, height: 720 } })
       contexts.push(context)
       const memberPage = await context.newPage()
@@ -160,6 +163,7 @@ for (const language of ['en', 'pl'] as const) {
     }
 
     await page.goto(eventUrl)
+    await expect(page.getByText(copy.rosterMessage)).toBeVisible()
     await expect(page.getByRole('button', { name: copy.enable })).toBeEnabled()
     await page.getByRole('button', { name: copy.enable }).click()
     await expect(page.getByRole('button', { name: copy.reset })).toBeVisible()
@@ -177,8 +181,9 @@ for (const language of ['en', 'pl'] as const) {
       expect(recipient).not.toBe(member.name)
       revealedRecipients.push(recipient)
     }
-    expect(new Set(revealedRecipients).size).toBe(rosterNames.length)
-    expect(new Set(revealedRecipients)).toEqual(new Set(rosterNames))
+    expect(new Set(revealedRecipients).size).toBe(claimedNames.length)
+    expect(revealedRecipients).toContain('Taylor')
+    expect(revealedRecipients.every((recipient) => rosterNames.includes(recipient))).toBe(true)
 
     await page.reload()
     await expect(page.getByText(copy.progress)).toBeVisible()

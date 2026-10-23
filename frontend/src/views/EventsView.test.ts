@@ -166,16 +166,16 @@ describe('event management views', () => {
     wrapper.unmount()
   })
 
-  it('lets the admin enable drawing after every roster entry is claimed', async () => {
+  it('lets the admin enable drawing with unclaimed roster entries', async () => {
     const readyEvent = {
       ...event,
       participants: [
         { id: 'participant-1', name: 'Morgan', claimed: true },
         { id: 'participant-2', name: 'Riley', claimed: true },
-        { id: 'participant-3', name: 'Taylor', claimed: true },
+        { id: 'participant-3', name: 'Taylor', claimed: false },
       ],
     }
-    request.mockImplementation((path: string, _body?: object) => {
+    request.mockImplementation((path: string) => {
       if (path === '/events/event-1') return Promise.resolve({ event: readyEvent })
       if (path === '/events/event-1/invite-link') return Promise.reject(new ApiError('not_found'))
       if (path === '/events/event-1/drawing') {
@@ -194,6 +194,7 @@ describe('event management views', () => {
     })
     await flushPromises()
 
+    expect(wrapper.get('button[aria-label="Enable drawing"]').attributes('disabled')).toBeUndefined()
     await wrapper.get('button[aria-label="Enable drawing"]').trigger('click')
     await flushPromises()
 
