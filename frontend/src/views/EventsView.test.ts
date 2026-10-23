@@ -166,6 +166,81 @@ describe('event management views', () => {
     wrapper.unmount()
   })
 
+  it('lets the admin enable drawing after every roster entry is claimed', async () => {
+    const readyEvent = {
+      ...event,
+      participants: [
+        { id: 'participant-1', name: 'Morgan', claimed: true },
+        { id: 'participant-2', name: 'Riley', claimed: true },
+        { id: 'participant-3', name: 'Taylor', claimed: true },
+      ],
+    }
+    request.mockImplementation((path: string, _body?: object) => {
+      if (path === '/events/event-1') return Promise.resolve({ event: readyEvent })
+      if (path === '/events/event-1/invite-link') return Promise.reject(new ApiError('not_found'))
+      if (path === '/events/event-1/drawing') {
+        return Promise.resolve({ drawing: { enabled: true, participant_count: 3, revealed_count: 0, has_revealed: false } })
+      }
+      return Promise.reject(new Error(`Unexpected request: ${path}`))
+    })
+    const router = createRouter({ history: createMemoryHistory(), routes: [
+      { path: '/events', component: { template: '<div />' } },
+      { path: '/events/:eventId', component: EventDetailView },
+    ] })
+    await router.push('/events/event-1')
+    await router.isReady()
+    const wrapper = mount({ template: '<RouterView />' }, {
+      global: { plugins: [router, createI18n({ legacy: false, locale: 'en', messages })] },
+    })
+    await flushPromises()
+
+    await wrapper.get('button[aria-label="Enable drawing"]').trigger('click')
+    await flushPromises()
+
+    expect(request).toHaveBeenCalledWith('/events/event-1/drawing', {})
+    expect(wrapper.text()).toContain('Drawing enabled')
+    wrapper.unmount()
+  })
+
+  it('reveals only the signed-in participant recipient on demand', async () => {
+    const drawnEvent = {
+      ...event,
+      is_admin: false,
+      is_participant: true,
+      drawing_enabled: true,
+      participants: [
+        { id: 'participant-1', name: 'Morgan', claimed: true },
+        { id: 'participant-2', name: 'Riley', claimed: true },
+        { id: 'participant-3', name: 'Taylor', claimed: true },
+      ],
+    }
+    request.mockImplementation((path: string) => {
+      if (path === '/events/event-1') return Promise.resolve({ event: drawnEvent })
+      if (path === '/events/event-1/drawing') {
+        return Promise.resolve({ drawing: { enabled: true, participant_count: 3, revealed_count: 0, has_revealed: false } })
+      }
+      if (path === '/events/event-1/reveal') return Promise.resolve({ recipient: { id: 'participant-2', name: 'Riley' } })
+      return Promise.reject(new Error(`Unexpected request: ${path}`))
+    })
+    const router = createRouter({ history: createMemoryHistory(), routes: [
+      { path: '/events', component: { template: '<div />' } },
+      { path: '/events/:eventId', component: EventDetailView },
+    ] })
+    await router.push('/events/event-1')
+    await router.isReady()
+    const wrapper = mount({ template: '<RouterView />' }, {
+      global: { plugins: [router, createI18n({ legacy: false, locale: 'en', messages })] },
+    })
+    await flushPromises()
+
+    await wrapper.get('button[aria-label="Reveal your recipient"]').trigger('click')
+    await flushPromises()
+
+    expect(request).toHaveBeenCalledWith('/events/event-1/reveal', {})
+    expect(wrapper.text()).toContain('Riley')
+    wrapper.unmount()
+  })
+
   it('discards unsaved detail changes on cancel', async () => {
     request.mockImplementation((path: string, body?: object) => {
       if (path === '/events/event-1' && !body) return Promise.resolve({ event })

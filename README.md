@@ -10,7 +10,7 @@ Project verifies and indirectale measure how does AI affect software development
 
 ## Development Status
 
-Phases 0-2 are verified. Phase 3 implements revocable event invitations and self-service roster claims and is ready for review. Registration signs users in immediately without sending a verification email; password recovery and email-change confirmation remain supported. Wishlist and drawing features remain later-phase work. Each phase is reviewed by the user before the next begins.
+Phases 0-4 are verified. Phase 5 implements private Secret Santa assignment, participant-only reveal, and pre-reveal reset, and is ready for review. Registration signs users in immediately without sending a verification email; password recovery and email-change confirmation remain supported. Event lifecycle and account cleanup remain later-phase work. Each phase is reviewed by the user before the next begins.
 
 - [Product specification](docs/spec.md)
 - [Delivery plan](docs/plan.md)
@@ -132,6 +132,15 @@ Screenshots and failure traces are written under the ignored frontend test-resul
 4. Check gifts above, equal to, and below the event budget in the matching currency, plus a gift in the other currency and an unknown-price gift. Only a matching-currency price above budget should be highlighted.
 5. As the admin, release a claim while drawing is disabled. Confirm the former member can no longer open event-scoped wishlists. Check the owner and participant views on desktop and a narrow mobile viewport in both languages.
 6. Run `.venv/bin/pytest -q`, the PostgreSQL integration suite with `GIVVI_TEST_DATABASE_URL` configured, and `npm --prefix frontend test`. Review the Phase 4 checkpoint before authorizing Phase 5.
+
+## Phase 5 Review
+
+1. As an admin, prepare at least three roster entries and have every participant claim one. Drawing stays disabled with fewer than three claims or any unclaimed entry.
+2. Enable drawing and confirm roster changes and claim corrections are no longer available. The admin sees reveal counts, never recipient identities.
+3. As each participant, reveal the recipient from that participant's account. Repeat the action or reload the event; the same recipient remains visible only to that account.
+4. On a separate event before any reveal, reset the drawing after accepting the confirmation. Confirm assignments clear and roster edits become available; enable a new draw.
+5. After any participant reveals, confirm reset is unavailable. Check English and Polish on desktop and a narrow mobile viewport.
+6. Run `.venv/bin/python -m pytest -q`, the PostgreSQL integration suite, `npm --prefix frontend test`, and the browser suite. Review the Phase 5 checkpoint before authorizing Phase 6.
 
 ## Upgrading Existing Development Data
 

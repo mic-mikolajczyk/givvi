@@ -262,3 +262,39 @@ def release_event_claim(event_id: str, participant_id: str) -> Response:
         event = get_admin_event(database, event_id, user.id, lock=True)
         services.release_claim(database, event, participant_id)
         return jsonify(code="claim_released")
+
+
+@events.post("/<event_id>/drawing")
+def enable_event_drawing(event_id: str) -> Response:
+    with Session(current_app.extensions["database"]) as database, database.begin():
+        require_csrf(database)
+        user = require_user(database)
+        event = get_admin_event(database, event_id, user.id, lock=True)
+        return jsonify(drawing=services.enable_drawing(database, event))
+
+
+@events.get("/<event_id>/drawing")
+def get_event_drawing_status(event_id: str) -> Response:
+    with Session(current_app.extensions["database"]) as database, database.begin():
+        user = require_user(database)
+        event = services.event_for_user(database, event_id, user.id, lock=True)
+        return jsonify(drawing=services.drawing_status(database, event, user.id))
+
+
+@events.post("/<event_id>/reveal")
+def reveal_event_assignment(event_id: str) -> Response:
+    with Session(current_app.extensions["database"]) as database, database.begin():
+        require_csrf(database)
+        user = require_user(database)
+        event = services.event_for_user(database, event_id, user.id, lock=True)
+        recipient = services.reveal_assignment(database, event, user.id)
+        return jsonify(recipient=recipient)
+
+
+@events.delete("/<event_id>/drawing")
+def reset_event_drawing(event_id: str) -> Response:
+    with Session(current_app.extensions["database"]) as database, database.begin():
+        require_csrf(database)
+        user = require_user(database)
+        event = get_admin_event(database, event_id, user.id, lock=True)
+        return jsonify(drawing=services.reset_drawing(database, event))

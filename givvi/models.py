@@ -9,10 +9,13 @@ from sqlalchemy import CheckConstraint
 from sqlalchemy import Date
 from sqlalchemy import DateTime
 from sqlalchemy import ForeignKey
+from sqlalchemy import ForeignKeyConstraint
+from sqlalchemy import Index
 from sqlalchemy import Integer
 from sqlalchemy import Numeric
 from sqlalchemy import String
 from sqlalchemy import Text
+from sqlalchemy import text
 from sqlalchemy import Time
 from sqlalchemy import UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase
@@ -143,6 +146,7 @@ class EventParticipant(Base):
     __tablename__ = "event_participants"
     __table_args__ = (
         UniqueConstraint("event_id", "user_id", name="event_participant_user"),
+        UniqueConstraint("id", "event_id", name="event_participant_id_event"),
         CheckConstraint("length(name) BETWEEN 1 AND 120", name="event_participant_name_length"),
     )
 
@@ -150,3 +154,47 @@ class EventParticipant(Base):
     event_id: Mapped[str] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(120))
     user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
+
+
+class EventDraw(Base):
+    __tablename__ = "event_draws"
+    __table_args__ = (
+        UniqueConstraint("id", "event_id", name="event_draw_id_event"),
+        Index(
+            "uq_event_draw_active",
+            "event_id",
+            unique=True,
+            postgresql_where=text("reset_at IS NULL"),
+            sqlite_where=text("reset_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    event_id: Mapped[str] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    reset_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class EventAssignment(Base):
+    __tablename__ = "event_assignments"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["draw_id", "event_id"], ["event_draws.id", "event_draws.event_id"], ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["giver_participant_id", "event_id"], ["event_participants.id", "event_participants.event_id"],
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["recipient_participant_id", "event_id"], ["event_participants.id", "event_participants.event_id"],
+            ondelete="RESTRICT",
+        ),
+        UniqueConstraint("draw_id", "recipient_participant_id", name="event_assignment_recipient"),
+        CheckConstraint("giver_participant_id <> recipient_participant_id", name="event_assignment_no_self"),
+    )
+
+    draw_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    giver_participant_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    event_id: Mapped[str] = mapped_column(String(36))
+    recipient_participant_id: Mapped[str] = mapped_column(String(36))
+    revealed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

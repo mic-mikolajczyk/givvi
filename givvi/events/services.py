@@ -12,6 +12,8 @@ from zoneinfo import ZoneInfoNotFoundError
 from cryptography.fernet import Fernet
 from cryptography.fernet import InvalidToken
 from flask import current_app
+from sqlalchemy import delete
+from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy import update
 from sqlalchemy.orm import Session
@@ -23,12 +25,15 @@ from givvi.accounts.services import normalized_email
 from givvi.errors import ApiError
 from givvi.models import EmailMessage
 from givvi.models import Event
+from givvi.models import EventAssignment
+from givvi.models import EventDraw
 from givvi.models import EventParticipant
 from givvi.models import User
 
 MAX_ROSTER_ENTRIES = 100
 MAX_EVENT_BUDGET = Decimal("999999.99")
 INVITATION_EMAIL_RETENTION_DAYS = 30
+MAX_DRAW_ATTEMPTS = 1000
 
 
 def event_view(event: Event, user_id: str, participants: list[EventParticipant]) -> dict:
@@ -157,6 +162,133 @@ def roster(database: Session, event_id: str, lock: bool = False) -> list[EventPa
     if lock:
         query = query.with_for_update()
     return list(database.scalars(query))
+
+
+def _secure_shuffle(participants: list[EventParticipant]) -> None:
+    secrets.SystemRandom().shuffle(participants)
+
+
+def enable_drawing(database: Session, event: Event) -> dict:
+    if event.archived or event.cancelled:
+        raise ApiError("event_read_only", 409)
+    if event.drawing_enabled:
+        return drawing_status(database, event, None)
+
+    participants = roster(database, event.id, lock=True)
+    if len([participant for participant in participants if participant.user_id is not None]) < 3:
+        raise ApiError("not_enough_participants", 409)
+    if any(participant.user_id is None for participant in participants):
+        raise ApiError("participants_unclaimed", 409)
+
+    recipients = list(participants)
+    shuffle = current_app.config.get("DRAW_SHUFFLE", _secure_shuffle)
+    for _ in range(MAX_DRAW_ATTEMPTS):
+        shuffle(recipients)
+        if all(giver.id != recipient.id for giver, recipient in zip(participants, recipients, strict=True)):
+            break
+    else:
+        raise ApiError("draw_generation_failed", 503)
+
+    draw = EventDraw(event_id=event.id, created_at=now(), reset_at=None)
+    database.add(draw)
+    database.flush()
+    database.add_all([
+        EventAssignment(
+            draw_id=draw.id,
+            event_id=event.id,
+            giver_participant_id=giver.id,
+            recipient_participant_id=recipient.id,
+        )
+        for giver, recipient in zip(participants, recipients, strict=True)
+    ])
+    event.drawing_enabled = True
+    event.drawing_ever_enabled = True
+    database.flush()
+    return drawing_status(database, event, None)
+
+
+def drawing_status(database: Session, event: Event, user_id: str | None) -> dict:
+    draw = database.scalar(select(EventDraw).where(
+        EventDraw.event_id == event.id, EventDraw.reset_at.is_(None),
+    ))
+    if event.drawing_enabled and not draw:
+        raise ApiError("draw_unavailable", 503)
+    claimed_count = database.scalar(select(func.count()).select_from(EventParticipant).where(
+        EventParticipant.event_id == event.id, EventParticipant.user_id.is_not(None),
+    )) or 0
+    is_admin = user_id is None or event.admin_id == user_id
+    revealed_count: int | None = 0 if is_admin else None
+    has_revealed = False
+    if draw:
+        if is_admin:
+            revealed_count = database.scalar(select(func.count()).select_from(EventAssignment).where(
+                EventAssignment.draw_id == draw.id, EventAssignment.revealed_at.is_not(None),
+            )) or 0
+        if user_id:
+            has_revealed = database.scalar(select(EventAssignment.draw_id).join(
+                EventParticipant, EventParticipant.id == EventAssignment.giver_participant_id,
+            ).where(
+                EventAssignment.draw_id == draw.id,
+                EventParticipant.user_id == user_id,
+                EventAssignment.revealed_at.is_not(None),
+            )) is not None
+    return {
+        "enabled": event.drawing_enabled,
+        "participant_count": claimed_count,
+        "revealed_count": revealed_count,
+        "has_revealed": has_revealed,
+    }
+
+
+def reveal_assignment(database: Session, event: Event, user_id: str) -> dict:
+    if not event.drawing_enabled:
+        raise ApiError("drawing_disabled", 409)
+    draw = database.scalar(select(EventDraw).where(
+        EventDraw.event_id == event.id, EventDraw.reset_at.is_(None),
+    ))
+    if not draw:
+        raise ApiError("draw_unavailable", 503)
+    giver = database.scalar(select(EventParticipant).where(
+        EventParticipant.event_id == event.id, EventParticipant.user_id == user_id,
+    ))
+    if not giver:
+        raise ApiError("not_found", 404)
+    assignment = database.scalar(select(EventAssignment).where(
+        EventAssignment.draw_id == draw.id, EventAssignment.giver_participant_id == giver.id,
+    ).with_for_update())
+    if not assignment:
+        raise ApiError("draw_unavailable", 503)
+    if assignment.revealed_at is None:
+        if event.archived or event.cancelled:
+            raise ApiError("event_read_only", 409)
+        assignment.revealed_at = now()
+        database.flush()
+    recipient = database.get(EventParticipant, assignment.recipient_participant_id)
+    if not recipient:
+        raise ApiError("draw_unavailable", 503)
+    return {"id": recipient.id, "name": recipient.name}
+
+
+def reset_drawing(database: Session, event: Event) -> dict:
+    if event.archived or event.cancelled:
+        raise ApiError("event_read_only", 409)
+    if not event.drawing_enabled:
+        raise ApiError("drawing_disabled", 409)
+    draw = database.scalar(select(EventDraw).where(
+        EventDraw.event_id == event.id, EventDraw.reset_at.is_(None),
+    ).with_for_update())
+    if not draw:
+        raise ApiError("draw_unavailable", 503)
+    revealed_count = database.scalar(select(func.count()).select_from(EventAssignment).where(
+        EventAssignment.draw_id == draw.id, EventAssignment.revealed_at.is_not(None),
+    )) or 0
+    if revealed_count:
+        raise ApiError("drawing_already_revealed", 409)
+    database.execute(delete(EventAssignment).where(EventAssignment.draw_id == draw.id))
+    draw.reset_at = now()
+    event.drawing_enabled = False
+    database.flush()
+    return drawing_status(database, event, None)
 
 
 def add_participant(database: Session, event: Event, name: object) -> EventParticipant:

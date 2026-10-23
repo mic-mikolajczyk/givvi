@@ -1,16 +1,21 @@
 <script setup lang="ts">
-import { ArrowLeft, Copy, Gift, Mail, Pencil, Plus, Save, Trash2, Unlink, UserRound, X } from '@lucide/vue'
+import {
+  ArrowLeft, Copy, Eye, Gift, Mail, Pencil, Plus, RotateCcw, Save, Shuffle, Trash2, Unlink, UserRound, X,
+} from '@lucide/vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
-import { ApiError, request, type EventParticipant, type EventRecord } from '../api'
+import { ApiError, request, type DrawingStatus, type EventParticipant, type EventRecord } from '../api'
 
 const { t, locale } = useI18n()
 const route = useRoute()
 const event = ref<EventRecord | null>(null)
+const drawingStatus = ref<DrawingStatus | null>(null)
+const ownRecipient = ref<EventParticipant | null>(null)
 const loading = ref(true)
 const saving = ref(false)
+const drawingBusy = ref(false)
 const editingDetails = ref(false)
 const error = ref('')
 const notice = ref('')
@@ -25,9 +30,25 @@ const form = reactive({
 })
 const eventId = computed(() => String(route.params.eventId || ''))
 const readOnly = computed(() => Boolean(event.value && (event.value.archived || event.value.cancelled || event.value.drawing_enabled)))
+const claimedCount = computed(() => event.value?.participants.filter((participant) => participant.claimed).length || 0)
+const canEnableDrawing = computed(() => Boolean(
+  event.value?.is_admin && !event.value.drawing_enabled && claimedCount.value >= 3
+  && claimedCount.value === event.value.participants.length && !event.value.archived && !event.value.cancelled,
+))
+const canResetDrawing = computed(() => Boolean(
+  event.value?.is_admin && drawingStatus.value?.enabled && drawingStatus.value.revealed_count === 0
+  && !event.value.archived && !event.value.cancelled,
+))
 
 function applyEvent(value: EventRecord) {
   event.value = value
+  drawingStatus.value = {
+    enabled: value.drawing_enabled,
+    participant_count: value.participants.filter((participant) => participant.claimed).length,
+    revealed_count: 0,
+    has_revealed: false,
+  }
+  ownRecipient.value = null
   Object.assign(form, {
     name: value.name,
     exchange_date: value.exchange_date,
@@ -47,10 +68,72 @@ async function loadEvent() {
     const payload = await request<{ event: EventRecord }>(`/events/${eventId.value}`)
     applyEvent(payload.event)
     await loadInviteLink()
+    if (payload.event.drawing_enabled) await loadDrawingStatus()
   } catch (failure) {
     error.value = failure instanceof ApiError ? failure.code : 'service_unavailable'
   } finally {
     loading.value = false
+  }
+}
+
+async function revealOwnAssignment() {
+  const payload = await request<{ recipient: EventParticipant }>(`/events/${eventId.value}/reveal`, {})
+  ownRecipient.value = payload.recipient
+}
+
+async function loadDrawingStatus() {
+  try {
+    const payload = await request<{ drawing: DrawingStatus }>(`/events/${eventId.value}/drawing`)
+    drawingStatus.value = payload.drawing
+    if (payload.drawing.has_revealed) await revealOwnAssignment()
+  } catch (failure) {
+    error.value = failure instanceof ApiError ? failure.code : 'service_unavailable'
+  }
+}
+
+async function enableDrawing() {
+  drawingBusy.value = true
+  error.value = ''
+  try {
+    const payload = await request<{ drawing: DrawingStatus }>(`/events/${eventId.value}/drawing`, {})
+    if (event.value) event.value.drawing_enabled = true
+    drawingStatus.value = payload.drawing
+    notice.value = 'drawing_enabled'
+  } catch (failure) {
+    error.value = failure instanceof ApiError ? failure.code : 'service_unavailable'
+  } finally {
+    drawingBusy.value = false
+  }
+}
+
+async function revealAssignment() {
+  drawingBusy.value = true
+  error.value = ''
+  try {
+    await revealOwnAssignment()
+    const payload = await request<{ drawing: DrawingStatus }>(`/events/${eventId.value}/drawing`)
+    drawingStatus.value = payload.drawing
+  } catch (failure) {
+    error.value = failure instanceof ApiError ? failure.code : 'service_unavailable'
+  } finally {
+    drawingBusy.value = false
+  }
+}
+
+async function resetDrawing() {
+  if (!window.confirm(t('confirmResetDrawing'))) return
+  drawingBusy.value = true
+  error.value = ''
+  try {
+    const payload = await request<{ drawing: DrawingStatus }>(`/events/${eventId.value}/drawing`, {}, true, 'DELETE')
+    if (event.value) event.value.drawing_enabled = false
+    drawingStatus.value = payload.drawing
+    ownRecipient.value = null
+    notice.value = 'drawing_reset'
+  } catch (failure) {
+    error.value = failure instanceof ApiError ? failure.code : 'service_unavailable'
+  } finally {
+    drawingBusy.value = false
   }
 }
 
@@ -394,6 +477,97 @@ watch(eventId, loadEvent, { immediate: true })
             </button>
           </div>
         </form>
+      </section>
+
+      <section
+        class="drawing-section"
+        aria-labelledby="drawing-heading"
+      >
+        <div class="section-heading">
+          <h2 id="drawing-heading">
+            {{ t('drawing') }}
+          </h2>
+          <span
+            v-if="event.drawing_enabled"
+            class="state-label"
+          >{{ t('drawingEnabled') }}</span>
+        </div>
+        <p
+          v-if="!event.drawing_enabled"
+          class="drawing-requirements"
+        >
+          {{ t('claimedParticipantCount', { claimed: claimedCount, total: event.participants.length }) }}
+          {{ t('drawingRequirements') }}
+        </p>
+        <p
+          v-else-if="event.is_admin && drawingStatus && drawingStatus.revealed_count !== null"
+          class="drawing-progress"
+          role="status"
+        >
+          {{ t('drawingProgress', { revealed: drawingStatus.revealed_count, total: drawingStatus.participant_count }) }}
+        </p>
+        <p
+          v-if="event.drawing_enabled && event.is_participant && !ownRecipient && !event.archived && !event.cancelled"
+          class="drawing-progress"
+        >
+          {{ t('assignmentAvailable') }}
+        </p>
+        <div class="drawing-actions">
+          <button
+            v-if="event.is_admin && !event.drawing_enabled"
+            class="primary-button"
+            type="button"
+            :aria-label="t('enableDrawing')"
+            :disabled="!canEnableDrawing || drawingBusy"
+            @click="enableDrawing"
+          >
+            <Shuffle
+              :size="18"
+              aria-hidden="true"
+            />{{ drawingBusy ? t('working') : t('enableDrawing') }}
+          </button>
+          <button
+            v-if="event.is_admin && canResetDrawing"
+            class="secondary-button"
+            type="button"
+            :disabled="drawingBusy"
+            @click="resetDrawing"
+          >
+            <RotateCcw
+              :size="18"
+              aria-hidden="true"
+            />{{ t('resetDrawing') }}
+          </button>
+          <button
+            v-if="event.drawing_enabled && event.is_participant && !ownRecipient && !drawingStatus?.has_revealed
+              && !event.archived && !event.cancelled"
+            class="primary-button"
+            type="button"
+            :aria-label="t('revealRecipient')"
+            :disabled="drawingBusy"
+            @click="revealAssignment"
+          >
+            <Eye
+              :size="18"
+              aria-hidden="true"
+            />{{ drawingBusy ? t('working') : t('revealRecipient') }}
+          </button>
+        </div>
+        <div
+          v-if="ownRecipient"
+          class="recipient-reveal"
+          role="status"
+          aria-live="polite"
+        >
+          <span>{{ t('yourRecipient') }}</span>
+          <strong>{{ ownRecipient.name }}</strong>
+        </div>
+        <p
+          v-if="event.drawing_enabled && drawingStatus?.revealed_count"
+          class="drawing-locked-note"
+        >
+          {{ t('drawingResetLocked') }}
+        </p>
       </section>
 
       <section class="roster-section">

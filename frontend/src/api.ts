@@ -14,6 +14,13 @@ export interface EventParticipant {
   claimed: boolean
 }
 
+export interface DrawingStatus {
+  enabled: boolean
+  participant_count: number
+  revealed_count: number | null
+  has_revealed: boolean
+}
+
 export interface GiftRecord {
   id: string
   name: string

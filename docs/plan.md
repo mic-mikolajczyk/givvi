@@ -202,8 +202,8 @@ Verified locally on 2026-10-20: 64 backend unit/API tests and 11 PostgreSQL inte
 
 The Phase 4 implementation is ready for user review at the local review URL. Phase 5 remains blocked on that review and separate authorization.
 
-- [ ] User verifies Phase 4 using the [README review steps](../README.md#phase-4-review).
-- [ ] User authorizes beginning Phase 5.
+- [x] User verifies Phase 4 using the [README review steps](../README.md#phase-4-review).
+- [x] User authorizes beginning Phase 5.
 
 ## Phase 5: Private Assignment and Reveal
 
@@ -211,21 +211,30 @@ The Phase 4 implementation is ready for user review at the local review URL. Pha
 
 ### Step 5.1: Atomic assignment generation
 
-- [ ] P5.1a: Add assignment/generation records, unique giver/recipient constraints, no-self checks, and reveal timestamps.
-- [ ] P5.1b: Implement enable-drawing under an event lock; validate three or more claimed entries and reject unclaimed entries.
-- [ ] P5.1c: Generate an unbiased shuffled permutation using secure randomness, rejecting self-pairings; validate the complete result before committing.
-- [ ] P5.1d: Lock roster and claims while enabled; return status only, never the assignment mapping.
-- [ ] P5.1e: Test invariants across roster sizes and seeded test randomness, rollback, duplicate enable requests, and concurrent claims/roster changes against drawing.
+- [x] P5.1a: Add assignment/generation records, unique giver/recipient constraints, no-self checks, and reveal timestamps.
+- [x] P5.1b: Implement enable-drawing under an event lock; validate three or more claimed entries and reject unclaimed entries.
+- [x] P5.1c: Generate an unbiased shuffled permutation using secure randomness, rejecting self-pairings; validate the complete result before committing.
+- [x] P5.1d: Lock roster and claims while enabled; return status only, never the assignment mapping.
+- [x] P5.1e: Test invariants across roster sizes and controlled test randomness, rollback, duplicate enable requests, and concurrent claims/roster changes against drawing.
 
 ### Step 5.2: Reveal and reset
 
-- [ ] P5.2a: Implement a current-user-only reveal endpoint with event locking and idempotent repeat behavior.
-- [ ] P5.2b: Build disabled/available/revealed UI states and a brief reveal animation honoring reduced-motion preferences.
-- [ ] P5.2c: Add explicit reset confirmation; clear assignments only if no reveal exists and keep drawing history for deletion rules.
-- [ ] P5.2d: Expose reveal status to the admin without recipient identities in any response or log.
-- [ ] P5.2e: Test reveal versus reset/cancellation races, repeat requests, admin recipient-access denial, and disabled/reset states.
+- [x] P5.2a: Implement a current-user-only reveal endpoint with event locking and idempotent repeat behavior.
+- [x] P5.2b: Build disabled/available/revealed UI states and a brief reveal animation honoring reduced-motion preferences.
+- [x] P5.2c: Add explicit reset confirmation; clear assignments only if no reveal exists and keep drawing history for deletion rules.
+- [x] P5.2d: Expose reveal status to the admin without recipient identities in any response or log.
+- [x] P5.2e: Test reveal versus reset/cancellation races, repeat requests, admin recipient-access denial, and disabled/reset states. The cancellation race test exercises the serialized cancellation state transition; the public lifecycle endpoint is delivered in Phase 6.
 
 **Acceptance:** Every participant has one non-self recipient; no admin or other participant can inspect their mapping; the first reveal irrevocably blocks reset.
+
+### Phase 5 Verification Checkpoint
+
+Verified locally on 2026-10-23: 71 backend unit/API tests and 16 PostgreSQL integration tests pass, including migration upgrade/downgrade, relational assignment constraints, deterministic derangement generation and rollback, claim/roster changes versus drawing, and reveal versus reset/cancellation transitions. All 33 frontend tests pass; frontend type-check and production build pass. Python flake8 and GOOGLE-profile isort pass. ESLint exits successfully with existing Vue template-format warnings in compact event-detail markup. The full 28-test desktop/mobile Playwright suite passes in English and Polish using the documented Playwright container. Hosted GitHub Actions has not been run.
+
+Phase 5 is ready for user review at the local review URL. Phase 6 remains blocked until this phase is verified and separately authorized.
+
+- [ ] User verifies Phase 5 using the [README review steps](../README.md#phase-5-review).
+- [ ] User authorizes beginning Phase 6.
 
 ## Phase 6: Lifecycle and Account Cleanup
 

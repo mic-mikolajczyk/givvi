@@ -6,8 +6,13 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy import update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from givvi.models import Event
+from givvi.models import EventAssignment
+from givvi.models import EventDraw
 from givvi.models import EventParticipant
 
 
@@ -133,3 +138,201 @@ def test_claim_and_roster_removal_are_serialized(migrated_app) -> None:
         remove_status = remove_future.result()
 
     assert (claim_status, remove_status) in ((200, 409), (404, 200))
+
+
+@pytest.mark.integration
+def test_claim_and_draw_generation_are_serialized(migrated_app) -> None:
+    app, unused_config = migrated_app
+    admin, admin_csrf, event_id, participant_ids, token = create_invited_event(
+        app, ("Morgan", "Riley", "Taylor"),
+    )
+    members = []
+    for index, participant_id in enumerate(participant_ids):
+        client = app.test_client()
+        csrf = register(client, app, f"draw-race-member-{uuid4()}@example.com")
+        members.append((client, csrf))
+        if index < 2:
+            response = client.post(f"/api/events/{event_id}/claim", json={
+                "participant_id": participant_id, "token": token,
+            }, headers={"X-CSRF-Token": csrf, "Origin": app.config["APP_ORIGIN"]})
+            assert response.status_code == 200
+    barrier = Barrier(2)
+
+    def enable_drawing() -> int:
+        barrier.wait(timeout=10)
+        return admin.post(f"/api/events/{event_id}/drawing", json={}, headers={
+            "X-CSRF-Token": admin_csrf, "Origin": app.config["APP_ORIGIN"],
+        }).status_code
+
+    def claim_last_entry() -> int:
+        barrier.wait(timeout=10)
+        client, csrf = members[2]
+        return client.post(f"/api/events/{event_id}/claim", json={
+            "participant_id": participant_ids[2], "token": token,
+        }, headers={"X-CSRF-Token": csrf, "Origin": app.config["APP_ORIGIN"]}).status_code
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        draw_future = executor.submit(enable_drawing)
+        claim_future = executor.submit(claim_last_entry)
+        draw_status = draw_future.result()
+        claim_status = claim_future.result()
+
+    assert (draw_status, claim_status) in ((200, 200), (409, 200))
+    with Session(app.extensions["database"]) as database:
+        event = database.get(Event, event_id)
+        assert event.drawing_enabled is (draw_status == 200)
+
+
+def create_claimed_draw(app):
+    admin, admin_csrf, event_id, participant_ids, token = create_invited_event(
+        app, ("Morgan", "Riley", "Taylor"),
+    )
+    members = []
+    for index, participant_id in enumerate(participant_ids):
+        client = app.test_client()
+        csrf = register(client, app, f"revealer-{uuid4()}@example.com")
+        claimed = client.post(f"/api/events/{event_id}/claim", json={
+            "participant_id": participant_id, "token": token,
+        }, headers={"X-CSRF-Token": csrf, "Origin": app.config["APP_ORIGIN"]})
+        assert claimed.status_code == 200
+        members.append((client, csrf))
+    enabled = admin.post(f"/api/events/{event_id}/drawing", json={}, headers={
+        "X-CSRF-Token": admin_csrf, "Origin": app.config["APP_ORIGIN"],
+    })
+    assert enabled.status_code == 200
+    return admin, admin_csrf, event_id, members
+
+
+@pytest.mark.integration
+def test_reveal_and_reset_are_serialized(migrated_app) -> None:
+    app, unused_config = migrated_app
+    admin, admin_csrf, event_id, members = create_claimed_draw(app)
+    barrier = Barrier(2)
+
+    def reveal_once() -> int:
+        barrier.wait(timeout=10)
+        client, csrf = members[0]
+        return client.post(f"/api/events/{event_id}/reveal", json={}, headers={
+            "X-CSRF-Token": csrf, "Origin": app.config["APP_ORIGIN"],
+        }).status_code
+
+    def reset_once() -> int:
+        barrier.wait(timeout=10)
+        return admin.delete(f"/api/events/{event_id}/drawing", headers={
+            "X-CSRF-Token": admin_csrf, "Origin": app.config["APP_ORIGIN"],
+        }).status_code
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        reveal_future = executor.submit(reveal_once)
+        reset_future = executor.submit(reset_once)
+        reveal_status = reveal_future.result()
+        reset_status = reset_future.result()
+
+    assert (reveal_status, reset_status) in ((200, 409), (409, 200))
+    with Session(app.extensions["database"]) as database:
+        event = database.get(Event, event_id)
+        draw = database.query(EventDraw).filter_by(event_id=event_id).one()
+        assert event.drawing_enabled is (reveal_status == 200)
+        assert (draw.reset_at is not None) is (reset_status == 200)
+
+
+@pytest.mark.integration
+def test_reveal_and_cancel_transition_are_serialized(migrated_app) -> None:
+    app, unused_config = migrated_app
+    admin, unused_admin_csrf, event_id, members = create_claimed_draw(app)
+    barrier = Barrier(2)
+
+    def reveal_once() -> int:
+        barrier.wait(timeout=10)
+        client, csrf = members[0]
+        return client.post(f"/api/events/{event_id}/reveal", json={}, headers={
+            "X-CSRF-Token": csrf, "Origin": app.config["APP_ORIGIN"],
+        }).status_code
+
+    def cancel_transition() -> None:
+        barrier.wait(timeout=10)
+        with Session(app.extensions["database"]) as database, database.begin():
+            event = database.scalar(select(Event).where(Event.id == event_id).with_for_update())
+            event.cancelled = True
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        reveal_future = executor.submit(reveal_once)
+        cancel_future = executor.submit(cancel_transition)
+        reveal_status = reveal_future.result()
+        cancel_future.result()
+
+    assert reveal_status in (200, 409)
+    with Session(app.extensions["database"]) as database:
+        event = database.get(Event, event_id)
+        assert event.cancelled is True
+    if reveal_status == 200:
+        client, csrf = members[0]
+        repeated_reveal = client.post(f"/api/events/{event_id}/reveal", json={}, headers={
+            "X-CSRF-Token": csrf, "Origin": app.config["APP_ORIGIN"],
+        })
+        assert repeated_reveal.status_code == 200
+    else:
+        assert reveal_status == 409
+
+
+@pytest.mark.integration
+def test_roster_addition_and_draw_generation_are_serialized(migrated_app) -> None:
+    app, unused_config = migrated_app
+    admin, admin_csrf, event_id, participant_ids, token = create_invited_event(
+        app, ("Morgan", "Riley", "Taylor"),
+    )
+    for index, participant_id in enumerate(participant_ids):
+        client = app.test_client()
+        csrf = register(client, app, f"roster-draw-member-{uuid4()}@example.com")
+        claimed = client.post(f"/api/events/{event_id}/claim", json={
+            "participant_id": participant_id, "token": token,
+        }, headers={"X-CSRF-Token": csrf, "Origin": app.config["APP_ORIGIN"]})
+        assert claimed.status_code == 200
+    barrier = Barrier(2)
+
+    def enable_drawing() -> int:
+        barrier.wait(timeout=10)
+        return admin.post(f"/api/events/{event_id}/drawing", json={}, headers={
+            "X-CSRF-Token": admin_csrf, "Origin": app.config["APP_ORIGIN"],
+        }).status_code
+
+    def add_roster_entry() -> int:
+        barrier.wait(timeout=10)
+        return admin.post(f"/api/events/{event_id}/participants", json={"name": "New entry"}, headers={
+            "X-CSRF-Token": admin_csrf, "Origin": app.config["APP_ORIGIN"],
+        }).status_code
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        draw_future = executor.submit(enable_drawing)
+        add_future = executor.submit(add_roster_entry)
+        draw_status = draw_future.result()
+        add_status = add_future.result()
+
+    assert (draw_status, add_status) in ((200, 409), (409, 201))
+    with Session(app.extensions["database"]) as database:
+        event = database.get(Event, event_id)
+        assert event.drawing_enabled is (draw_status == 200)
+
+
+@pytest.mark.integration
+def test_postgresql_rejects_self_and_duplicate_recipients(migrated_app) -> None:
+    app, unused_config = migrated_app
+    unused_admin, unused_csrf, event_id, unused_members = create_claimed_draw(app)
+    with Session(app.extensions["database"]) as database:
+        assignments = list(database.scalars(select(EventAssignment).where(EventAssignment.event_id == event_id)))
+        assert len(assignments) == 3
+        first, second = assignments[:2]
+
+        with pytest.raises(IntegrityError):
+            database.execute(update(EventAssignment).where(
+                EventAssignment.draw_id == first.draw_id,
+                EventAssignment.giver_participant_id == first.giver_participant_id,
+            ).values(recipient_participant_id=first.giver_participant_id))
+        database.rollback()
+
+        with pytest.raises(IntegrityError):
+            database.execute(update(EventAssignment).where(
+                EventAssignment.draw_id == first.draw_id,
+                EventAssignment.giver_participant_id == first.giver_participant_id,
+            ).values(recipient_participant_id=second.recipient_participant_id))
+        database.rollback()
