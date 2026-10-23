@@ -18,6 +18,8 @@ from givvi.errors import ApiError
 from givvi.events import services
 from givvi.models import Event
 from givvi.models import EventParticipant
+from givvi.models import Wishlist
+from givvi.wishlists import services as wishlist_services
 
 events = Blueprint("events", __name__, url_prefix="/api/events")
 
@@ -92,6 +94,34 @@ def get_event(event_id: str) -> Response:
         user = require_user(database)
         event = services.event_for_user(database, event_id, user.id)
         return jsonify(event=event_response(database, event, user.id))
+
+
+@events.get("/<event_id>/participants/<participant_id>/wishlist")
+def get_participant_wishlist(event_id: str, participant_id: str) -> Response:
+    with Session(current_app.extensions["database"]) as database, database.begin():
+        user = require_user(database)
+        is_member = database.scalar(select(EventParticipant.id).where(
+            EventParticipant.event_id == event_id, EventParticipant.user_id == user.id,
+        ))
+        participant = database.scalar(select(EventParticipant).where(
+            EventParticipant.id == participant_id,
+            EventParticipant.event_id == event_id,
+            EventParticipant.user_id.is_not(None),
+        ))
+        if not is_member or not participant:
+            raise ApiError("not_found", 404)
+        wishlist = database.scalar(select(Wishlist).where(Wishlist.user_id == participant.user_id))
+        if not wishlist:
+            raise ApiError("not_found", 404)
+        event = database.get(Event, event_id)
+        if not event:
+            raise ApiError("not_found", 404)
+        return jsonify(
+            event={"id": event.id, "name": event.name, "budget": str(event.budget) if event.budget is not None else None,
+                   "currency": event.currency},
+            participant={"id": participant.id, "name": participant.name},
+            gifts=[wishlist_services.gift_view(gift) for gift in wishlist_services.gifts(database, wishlist)],
+        )
 
 
 @events.patch("/<event_id>")

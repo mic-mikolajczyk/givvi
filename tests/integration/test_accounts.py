@@ -8,6 +8,7 @@ from argon2 import PasswordHasher
 import pytest
 from sqlalchemy import inspect
 from sqlalchemy import select
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -44,6 +45,8 @@ def test_migration_upgrade_downgrade_and_registration(migrated_app) -> None:
         assert "users" in inspect(connection).get_table_names()
         assert "events" in inspect(connection).get_table_names()
         assert "event_participants" in inspect(connection).get_table_names()
+        assert "gifts" in inspect(connection).get_table_names()
+        assert "order_version" in {column["name"] for column in inspect(connection).get_columns("wishlists")}
         assert {"invite_token_hash", "invite_token_encrypted"} <= {
             column["name"] for column in inspect(connection).get_columns("events")
         }
@@ -133,7 +136,7 @@ def test_upgrade_preserves_unverified_account_and_removes_signup_token(migrated_
             id="legacy-user", name="Alice", email="legacy@example.com",
             password_hash=PasswordHasher().hash(password), language="en",
         ))
-        connection.execute(Wishlist.__table__.insert().values(user_id="legacy-user"))
+        connection.execute(text("INSERT INTO wishlists (user_id) VALUES (:user_id)"), {"user_id": "legacy-user"})
         connection.execute(AccountToken.__table__.insert().values(
             id=digest("legacy-signup-token"), user_id="legacy-user", purpose="verify",
             expires_at=now() + timedelta(hours=24),

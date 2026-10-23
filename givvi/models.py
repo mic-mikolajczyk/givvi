@@ -40,6 +40,33 @@ class Wishlist(Base):
     __tablename__ = "wishlists"
 
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    order_version: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class Gift(Base):
+    __tablename__ = "gifts"
+    __table_args__ = (
+        CheckConstraint("length(name) BETWEEN 1 AND 120", name="gift_name_length"),
+        CheckConstraint("description IS NULL OR length(description) <= 2000", name="gift_description_length"),
+        CheckConstraint("link IS NULL OR length(link) <= 2048", name="gift_link_length"),
+        CheckConstraint("price IS NULL OR (price >= 0 AND price <= 999999.99)", name="gift_price_range"),
+        CheckConstraint("currency IS NULL OR currency IN ('EUR', 'PLN')", name="gift_currency"),
+        CheckConstraint(
+            "(price IS NULL AND currency IS NULL) OR (price IS NOT NULL AND currency IS NOT NULL)",
+            name="gift_price_currency",
+        ),
+        CheckConstraint("position >= 0", name="gift_position_nonnegative"),
+        UniqueConstraint("wishlist_id", "position", name="gift_wishlist_position"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    wishlist_id: Mapped[str] = mapped_column(ForeignKey("wishlists.user_id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str | None] = mapped_column(Text)
+    price: Mapped[Decimal | None] = mapped_column(Numeric(8, 2))
+    currency: Mapped[str | None] = mapped_column(String(3))
+    link: Mapped[str | None] = mapped_column(String(2048))
+    position: Mapped[int] = mapped_column(Integer)
 
 
 class LoginSession(Base):

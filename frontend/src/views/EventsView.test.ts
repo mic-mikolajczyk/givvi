@@ -138,6 +138,34 @@ describe('event management views', () => {
     wrapper.unmount()
   })
 
+  it('links claimed participant rows to their event-scoped wishlist', async () => {
+    const memberEvent = {
+      ...event,
+      is_admin: false,
+      is_participant: true,
+      participants: [{ id: 'participant-1', name: 'Morgan', claimed: true }],
+    }
+    request.mockImplementation((path: string) => {
+      if (path === '/events/event-1') return Promise.resolve({ event: memberEvent })
+      if (path === '/events/event-1/invite-link') return Promise.reject(new ApiError('not_found'))
+      return Promise.reject(new Error(`Unexpected request: ${path}`))
+    })
+    const router = createRouter({ history: createMemoryHistory(), routes: [
+      { path: '/events', component: { template: '<div />' } },
+      { path: '/events/:eventId', component: EventDetailView },
+    ] })
+    await router.push('/events/event-1')
+    await router.isReady()
+    const wrapper = mount({ template: '<RouterView />' }, {
+      global: { plugins: [router, createI18n({ legacy: false, locale: 'en', messages })] },
+    })
+    await flushPromises()
+
+    expect(wrapper.get('a[href="/events/event-1/participants/participant-1/wishlist"]').attributes('aria-label'))
+      .toBe('View wishlist Morgan')
+    wrapper.unmount()
+  })
+
   it('discards unsaved detail changes on cancel', async () => {
     request.mockImplementation((path: string, body?: object) => {
       if (path === '/events/event-1' && !body) return Promise.resolve({ event })

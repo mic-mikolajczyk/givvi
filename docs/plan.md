@@ -181,20 +181,29 @@ The invite-to-claim flow is ready for user review. Wishlists and drawing remain 
 
 ### Step 4.1: Owner gift management
 
-- [ ] P4.1a: Add gift fields, explicit price currency, stable ordering, constraints, and migrations.
-- [ ] P4.1b: Implement owner-only gift CRUD and atomic order updates, rejecting stale writes and duplicate/missing IDs.
-- [ ] P4.1c: Build gift list/edit pages, unknown-price states, empty states, and keyboard-accessible reorder controls.
-- [ ] P4.1d: Validate HTTP/HTTPS links without fetching them server-side; render descriptions as escaped text.
-- [ ] P4.1e: Test ownership denial, precision/ranges, deletion, ordering, malformed links, and concurrent updates.
+- [x] P4.1a: Add gift fields, explicit price currency, stable ordering, constraints, and migrations.
+- [x] P4.1b: Implement owner-only gift CRUD and atomic order updates, rejecting stale writes and duplicate/missing IDs.
+- [x] P4.1c: Build gift list/edit pages, unknown-price states, empty states, and keyboard-accessible reorder controls.
+- [x] P4.1d: Validate HTTP/HTTPS links without fetching them server-side; render descriptions as escaped text.
+- [x] P4.1e: Test ownership denial, precision/ranges, deletion, ordering, malformed links, and concurrent updates.
 
 ### Step 4.2: Event-context wishlist access
 
-- [ ] P4.2a: Add member-authorized read projections exposing roster names rather than private account information.
-- [ ] P4.2b: Add participant wishlist pages and navigation back to the event.
-- [ ] P4.2c: Highlight over-budget items only for matching currencies and known budget/price; keep unknown and mismatched cases neutral.
-- [ ] P4.2d: Test membership revocation, no editing by viewers, all comparison cases, and absence of reservation controls.
+- [x] P4.2a: Add member-authorized read projections exposing roster names rather than private account information.
+- [x] P4.2b: Add participant wishlist pages and navigation back to the event.
+- [x] P4.2c: Highlight over-budget items only for matching currencies and known budget/price; keep unknown and mismatched cases neutral.
+- [x] P4.2d: Test membership revocation, no editing by viewers, all comparison cases, and absence of reservation controls.
 
 **Acceptance:** Wishlist ownership and event access are enforced server-side; priority and budget display match the spec in both languages.
+
+### Phase 4 Verification Checkpoint
+
+Verified locally on 2026-10-20: 64 backend unit/API tests and 11 PostgreSQL integration tests pass, including migration upgrade/downgrade, database gift constraints, concurrent stale reorder rejection, and membership revocation. Frontend tests, lint, typecheck, and production build pass. Targeted Playwright journeys pass for owner gift management and event-member wishlist viewing in English and Polish on desktop and mobile; the account lifecycle journey with gift creation passes in English and Polish on desktop. Screenshots were inspected for both wishlist contexts. Python files changed in this phase pass flake8 and GOOGLE-profile isort. Hosted GitHub Actions has not been run.
+
+The Phase 4 implementation is ready for user review at the local review URL. Phase 5 remains blocked on that review and separate authorization.
+
+- [ ] User verifies Phase 4 using the [README review steps](../README.md#phase-4-review).
+- [ ] User authorizes beginning Phase 5.
 
 ## Phase 5: Private Assignment and Reveal
 

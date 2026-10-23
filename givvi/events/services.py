@@ -43,6 +43,7 @@ def event_view(event: Event, user_id: str, participants: list[EventParticipant])
         "currency": event.currency,
         "budget": str(event.budget) if event.budget is not None else None,
         "is_admin": event.admin_id == user_id,
+        "is_participant": any(participant.user_id == user_id for participant in participants),
         "drawing_enabled": event.drawing_enabled,
         "archived": event.archived,
         "cancelled": event.cancelled,

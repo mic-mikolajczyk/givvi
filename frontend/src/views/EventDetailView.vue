@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowLeft, Copy, Mail, Pencil, Plus, Save, Trash2, Unlink, UserRound, X } from '@lucide/vue'
+import { ArrowLeft, Copy, Gift, Mail, Pencil, Plus, Save, Trash2, Unlink, UserRound, X } from '@lucide/vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
@@ -419,6 +419,15 @@ watch(eventId, loadEvent, { immediate: true })
             <template v-else>
               <span class="roster-name"><UserRound :size="18" aria-hidden="true" />{{ participant.name }}</span>
               <span :class="['claim-state', participant.claimed ? 'is-claimed' : '']">{{ participant.claimed ? t('claimed') : t('notClaimed') }}</span>
+              <RouterLink
+                v-if="event.is_participant && participant.claimed"
+                class="icon-button wishlist-participant-link"
+                :to="`/events/${event.id}/participants/${participant.id}/wishlist`"
+                :aria-label="`${t('viewWishlist')} ${participant.name}`"
+                :title="t('viewWishlist')"
+              >
+                <Gift :size="18" aria-hidden="true" />
+              </RouterLink>
               <button
                 v-if="event.is_admin && !readOnly && participant.claimed"
                 class="icon-button danger-button"

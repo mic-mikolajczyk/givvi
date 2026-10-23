@@ -14,6 +14,16 @@ export interface EventParticipant {
   claimed: boolean
 }
 
+export interface GiftRecord {
+  id: string
+  name: string
+  description: string | null
+  price: string | null
+  currency: 'EUR' | 'PLN' | null
+  link: string | null
+  position: number
+}
+
 export interface EventRecord {
   id: string
   name: string
@@ -25,6 +35,7 @@ export interface EventRecord {
   currency: 'EUR' | 'PLN'
   budget: string | null
   is_admin: boolean
+  is_participant?: boolean
   drawing_enabled: boolean
   archived: boolean
   cancelled: boolean

@@ -29,11 +29,14 @@ for (const language of ['en', 'pl'] as const) {
       login: 'Sign in', events: 'Events', profile: 'Profile', save: 'Save', saved: 'Profile saved',
       emailChange: 'Change email', passwordChange: 'Change password', logout: 'Log out', reset: 'Send reset link',
       newPassword: 'Set new password', passwordUpdated: 'Password updated',
+      wishlist: 'Wishlist', addGift: 'Add a gift', giftName: 'Gift name', saveGift: 'Save gift', unknownPrice: 'Price unknown',
     } : {
       signup: 'Utwórz konto', inbox: 'Sprawdź skrzynkę odbiorczą', verify: 'Potwierdź nowy email', verified: 'Email potwierdzony',
       login: 'Zaloguj się', events: 'Wydarzenia', profile: 'Profil', save: 'Zapisz', saved: 'Profil zapisany',
       emailChange: 'Zmień email', passwordChange: 'Zmień hasło', logout: 'Wyloguj się', reset: 'Wyślij link',
       newPassword: 'Ustaw nowe hasło', passwordUpdated: 'Hasło zmienione',
+      wishlist: 'Lista życzeń', addGift: 'Dodaj prezent', giftName: 'Nazwa prezentu', saveGift: 'Zapisz prezent',
+      unknownPrice: 'Nieznana cena',
     }
     await page.goto('/register')
     await page.getByRole('combobox').selectOption(language)
@@ -93,7 +96,17 @@ for (const language of ['en', 'pl'] as const) {
     await page.locator('input[name="password"]').fill('a recovered correct password')
     await page.getByRole('button', { name: copy.login }).click()
     await expect(page.getByRole('heading', { name: copy.events, exact: true })).toBeVisible()
-    await page.getByRole('link', { name: language === 'en' ? 'Wishlist' : 'Lista życzeń', exact: true }).click()
-    await expect(page.getByRole('heading')).toBeVisible()
+    await page.getByRole('link', { name: copy.wishlist, exact: true }).click()
+    await page.getByRole('button', { name: copy.addGift }).click()
+    await page.locator('input[name="gift_name"]').fill('A useful gift')
+    const giftResponsePromise = page.waitForResponse((response) =>
+      response.url().endsWith('/api/wishlist/gifts') && response.request().method() === 'POST',
+    )
+    await page.getByRole('button', { name: copy.saveGift }).click()
+    const giftResponse = await giftResponsePromise
+    expect(giftResponse.ok(), await giftResponse.text()).toBe(true)
+    await expect(page.getByText('A useful gift')).toBeVisible()
+    await expect(page.getByText(copy.unknownPrice)).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   })
 }

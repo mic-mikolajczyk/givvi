@@ -8,11 +8,11 @@ import './style.css'
 import StatusView from './views/StatusView.vue'
 import AccountShell from './views/AccountShell.vue'
 import AuthView from './views/AuthView.vue'
-import DashboardView from './views/DashboardView.vue'
 import EventDetailView from './views/EventDetailView.vue'
 import EventsView from './views/EventsView.vue'
 import InvitationView from './views/InvitationView.vue'
 import ProfileView from './views/ProfileView.vue'
+import WishlistView from './views/WishlistView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -25,7 +25,8 @@ const router = createRouter({
       path: '/', component: AccountShell, meta: { authenticated: true }, children: [
         { path: 'events', name: 'events', component: EventsView },
         { path: 'events/:eventId', name: 'event', component: EventDetailView },
-        { path: 'wishlist', name: 'wishlist', component: DashboardView },
+        { path: 'events/:eventId/participants/:participantId/wishlist', name: 'participant-wishlist', component: WishlistView },
+        { path: 'wishlist', name: 'wishlist', component: WishlistView },
         { path: 'profile', name: 'profile', component: ProfileView },
       ],
     },

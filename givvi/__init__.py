@@ -13,6 +13,7 @@ from givvi.commands import register_commands
 from givvi.errors import configure_errors
 from givvi.events.controller import events
 from givvi.health import health
+from givvi.wishlists.controller import wishlists
 
 DATABASE_CONNECT_TIMEOUT_SECONDS = 3
 
@@ -60,5 +61,6 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
     configure_errors(app)
     app.register_blueprint(accounts)
     app.register_blueprint(events)
+    app.register_blueprint(wishlists)
     register_commands(app)
     return app

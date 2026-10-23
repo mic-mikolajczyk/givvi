@@ -124,6 +124,15 @@ Screenshots and failure traces are written under the ignored frontend test-resul
 5. As the admin, release a mistaken claim. Confirm that participant loses event access and can claim a different available roster entry.
 6. Run the PostgreSQL integration checks for migrations, competing claims, and claim-versus-roster-removal. Review the Phase 3 checkpoint in the delivery plan before authorizing Phase 4. Claim-versus-draw race coverage is a Phase 5.1b gate when drawing is implemented.
 
+## Phase 4 Review
+
+1. Open Wishlist and add gifts with both unknown and known prices. Edit a gift, move gifts up and down, and delete one. Repeat in English and Polish; an unknown price should be explicit, and a known price must retain its selected EUR or PLN currency.
+2. Create an event with a budget and roster entries for at least two accounts. Invite both accounts and have each claim a roster entry; the organizer must claim an entry separately to participate.
+3. As a claimed participant, open the event and select another claimed participant's wishlist. Confirm the roster name and event budget are shown, account names/emails are not, and the view has no edit, reorder, delete, reservation, or purchase controls.
+4. Check gifts above, equal to, and below the event budget in the matching currency, plus a gift in the other currency and an unknown-price gift. Only a matching-currency price above budget should be highlighted.
+5. As the admin, release a claim while drawing is disabled. Confirm the former member can no longer open event-scoped wishlists. Check the owner and participant views on desktop and a narrow mobile viewport in both languages.
+6. Run `.venv/bin/pytest -q`, the PostgreSQL integration suite with `GIVVI_TEST_DATABASE_URL` configured, and `npm --prefix frontend test`. Review the Phase 4 checkpoint before authorizing Phase 5.
+
 ## Upgrading Existing Development Data
 
 Stop the API and email worker, run `.venv/bin/flask --env-file .env.example --app givvi db-upgrade`, then restart both. The forward migration retains users/passwords, removes registration-verification state, and invalidates old signup tokens. The worker purges obsolete queued account emails instead of sending dead links. Existing accounts can sign in without an onboarding step. Downgrading restores the old schema but cannot restore removed tokens or previous verification timestamps.
