@@ -337,12 +337,42 @@ def test_admin_draws_once_and_members_reveal_only_their_own_recipient(account_ap
     assert set(revealed) == set(participant_ids)
     assert admin.get(f"/api/events/{event_id}/drawing").json["drawing"]["revealed_count"] == 3
     repeated_reveal = post(members[0][0], account_app, members[0][1], f"/api/events/{event_id}/reveal", {})
-    blocked_reset = admin.delete(f"/api/events/{event_id}/drawing", headers={
+    reset_after_reveal = admin.delete(f"/api/events/{event_id}/drawing", headers={
         "X-CSRF-Token": admin_csrf, "Origin": account_app.config["APP_ORIGIN"],
     })
     assert repeated_reveal.json["recipient"]["id"] == revealed[0]
-    assert blocked_reset.status_code == 409
-    assert blocked_reset.json["code"] == "drawing_already_revealed"
+    assert reset_after_reveal.status_code == 200
+    assert reset_after_reveal.json["drawing"]["enabled"] is False
+    with Session(account_app.extensions["database"]) as database:
+        event = database.get(Event, event_id)
+        assert event.drawing_ever_enabled is False
+        assert database.query(EventDraw).filter_by(event_id=event_id).count() == 0
+        assert database.query(EventAssignment).filter_by(event_id=event_id).count() == 0
+
+
+def test_admin_can_reset_after_a_recipient_has_been_revealed(account_app) -> None:
+    admin, admin_csrf, event_id, participant_ids = create_claimed_event(account_app, 3, "reset-revealed")
+    enabled = admin.post(f"/api/events/{event_id}/drawing", json={}, headers={
+        "X-CSRF-Token": admin_csrf, "Origin": account_app.config["APP_ORIGIN"],
+    })
+    assert enabled.status_code == 200
+    with Session(account_app.extensions["database"]) as database:
+        assignment = database.query(EventAssignment).filter_by(
+            event_id=event_id, giver_participant_id=participant_ids[0],
+        ).one()
+        assignment.revealed_at = datetime.now(timezone.utc)
+
+    reset = admin.delete(f"/api/events/{event_id}/drawing", headers={
+        "X-CSRF-Token": admin_csrf, "Origin": account_app.config["APP_ORIGIN"],
+    })
+
+    assert reset.status_code == 200
+    assert reset.json["drawing"]["enabled"] is False
+    with Session(account_app.extensions["database"]) as database:
+        event = database.get(Event, event_id)
+        assert event.drawing_ever_enabled is False
+        assert database.query(EventDraw).filter_by(event_id=event_id).count() == 0
+        assert database.query(EventAssignment).filter_by(event_id=event_id).count() == 0
 
 
 @pytest.mark.parametrize("participant_count", [3, 4, 8])
@@ -393,7 +423,7 @@ def test_failed_draw_generation_rolls_back_without_partial_records(account_app) 
         assert database.query(EventAssignment).filter_by(event_id=event_id).count() == 0
 
 
-def test_drawing_includes_unclaimed_entries_and_reset_preserves_draw_history(account_app) -> None:
+def test_reset_erases_drawing_and_restores_setup_state(account_app) -> None:
     admin = account_app.test_client()
     admin_csrf = register(admin, account_app, "draw-reset-admin@example.com")
     event_id = create_event(admin, account_app, admin_csrf).json["event"]["id"]
@@ -437,8 +467,8 @@ def test_drawing_includes_unclaimed_entries_and_reset_preserves_draw_history(acc
     assert reset.json["drawing"]["enabled"] is False
     with Session(account_app.extensions["database"]) as database:
         event = database.get(Event, event_id)
-        assert event.drawing_ever_enabled is True
-        assert database.query(EventDraw).filter_by(event_id=event_id).count() == 1
+        assert event.drawing_ever_enabled is False
+        assert database.query(EventDraw).filter_by(event_id=event_id).count() == 0
         assert database.query(EventAssignment).filter_by(event_id=event_id).count() == 0
 
     added = post(admin, account_app, admin_csrf, f"/api/events/{event_id}/participants", {"name": "New member"})
@@ -447,7 +477,7 @@ def test_drawing_includes_unclaimed_entries_and_reset_preserves_draw_history(acc
     assert redrawn.status_code == 200
     assert redrawn.json["drawing"]["participant_count"] == 5
     with Session(account_app.extensions["database"]) as database:
-        assert database.query(EventDraw).filter_by(event_id=event_id).count() == 2
+        assert database.query(EventDraw).filter_by(event_id=event_id).count() == 1
         assert database.query(EventAssignment).filter_by(event_id=event_id).count() == 5
 
 

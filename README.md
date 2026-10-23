@@ -138,8 +138,8 @@ Screenshots and failure traces are written under the ignored frontend test-resul
 1. As an admin, prepare at least three roster entries; leave at least one unclaimed. Drawing can be enabled once three entries exist, and the page states that all entries will be included.
 2. Enable drawing and confirm every roster entry participates, including the unclaimed name. Roster changes and claims are locked until reset; the admin sees reveal counts, never recipient identities.
 3. As each claimed participant, reveal the recipient from that participant's account. In a three-entry draw with two claimed givers, confirm one can reveal the unclaimed roster name. Repeat the action or reload; the same recipient remains visible only to that account.
-4. On a separate event before any reveal, reset the drawing after accepting the confirmation. Confirm assignments clear and roster edits become available; enable a new draw.
-5. After any participant reveals, confirm reset is unavailable. Check English and Polish on desktop and a narrow mobile viewport.
+4. After at least one participant reveals, reset the drawing after reading and accepting the warning. Confirm the old assignments are removed, drawing is disabled, and roster/claim controls become available again.
+5. Enable a new draw and have every claimed participant reveal again. Confirm the old recipient is no longer returned by the API and the admin can still reset again. Check English and Polish on desktop and a narrow mobile viewport.
 6. Run `.venv/bin/python -m pytest -q`, the PostgreSQL integration suite, `npm --prefix frontend test`, and the browser suite. Review the Phase 5 checkpoint before authorizing Phase 6.
 
 ## Upgrading Existing Development Data

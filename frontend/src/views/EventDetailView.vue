@@ -36,7 +36,7 @@ const canEnableDrawing = computed(() => Boolean(
   && !event.value.archived && !event.value.cancelled,
 ))
 const canResetDrawing = computed(() => Boolean(
-  event.value?.is_admin && drawingStatus.value?.enabled && drawingStatus.value.revealed_count === 0
+  event.value?.is_admin && drawingStatus.value?.enabled
   && !event.value.archived && !event.value.cancelled,
 ))
 
@@ -129,6 +129,7 @@ async function resetDrawing() {
     if (event.value) event.value.drawing_enabled = false
     drawingStatus.value = payload.drawing
     ownRecipient.value = null
+    await loadInviteLink()
     notice.value = 'drawing_reset'
   } catch (failure) {
     error.value = failure instanceof ApiError ? failure.code : 'service_unavailable'
@@ -512,6 +513,12 @@ watch(eventId, loadEvent, { immediate: true })
         >
           {{ t('assignmentAvailable') }}
         </p>
+        <p
+          v-if="canResetDrawing"
+          class="drawing-reset-warning"
+        >
+          {{ t('drawingResetWarning') }}
+        </p>
         <div class="drawing-actions">
           <button
             v-if="event.is_admin && !event.drawing_enabled"
@@ -530,6 +537,8 @@ watch(eventId, loadEvent, { immediate: true })
             v-if="event.is_admin && canResetDrawing"
             class="secondary-button"
             type="button"
+            :aria-label="t('resetDrawing')"
+            :title="t('resetDrawing')"
             :disabled="drawingBusy"
             @click="resetDrawing"
           >
@@ -562,12 +571,6 @@ watch(eventId, loadEvent, { immediate: true })
           <span>{{ t('yourRecipient') }}</span>
           <strong>{{ ownRecipient.name }}</strong>
         </div>
-        <p
-          v-if="event.drawing_enabled && drawingStatus?.revealed_count"
-          class="drawing-locked-note"
-        >
-          {{ t('drawingResetLocked') }}
-        </p>
       </section>
 
       <section class="roster-section">

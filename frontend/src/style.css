@@ -95,7 +95,8 @@ h1 { font-size: 24px; font-weight: 700; margin: 0 0 24px; }
 .detail-form, .detail-summary { margin-top: 20px; }
 .invitation-section { margin-top: 32px; padding: 22px 0; border-block: 1px solid var(--border); }
 .drawing-section { margin-top: 32px; padding: 22px 0; border-bottom: 1px solid var(--border); }
-.drawing-requirements, .drawing-progress, .drawing-locked-note { color: #58655f; overflow-wrap: anywhere; }
+.drawing-requirements, .drawing-progress { color: #58655f; overflow-wrap: anywhere; }
+.drawing-reset-warning { margin: 16px 0; padding: 12px 14px; border-left: 4px solid var(--danger); background: #fff2f0; color: #7f2f2c; overflow-wrap: anywhere; }
 .drawing-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .recipient-reveal { display: flex; flex-direction: column; gap: 6px; margin-top: 20px; padding: 16px 18px; border-left: 4px solid var(--accent); background: #edf6f1; animation: recipient-reveal 420ms ease-out both; }
 .recipient-reveal strong { font-size: 20px; overflow-wrap: anywhere; }

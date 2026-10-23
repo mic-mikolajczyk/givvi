@@ -232,12 +232,13 @@ def test_reveal_and_reset_are_serialized(migrated_app) -> None:
         reveal_status = reveal_future.result()
         reset_status = reset_future.result()
 
-    assert (reveal_status, reset_status) in ((200, 409), (409, 200))
+    assert (reveal_status, reset_status) in ((200, 200), (409, 200))
     with Session(app.extensions["database"]) as database:
         event = database.get(Event, event_id)
-        draw = database.query(EventDraw).filter_by(event_id=event_id).one()
-        assert event.drawing_enabled is (reveal_status == 200)
-        assert (draw.reset_at is not None) is (reset_status == 200)
+        assert event.drawing_enabled is False
+        assert event.drawing_ever_enabled is False
+        assert database.query(EventDraw).filter_by(event_id=event_id).count() == 0
+        assert database.query(EventAssignment).filter_by(event_id=event_id).count() == 0
 
 
 @pytest.mark.integration

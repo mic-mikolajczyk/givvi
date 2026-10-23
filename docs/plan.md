@@ -50,7 +50,7 @@ This is a backlog, not a fixed-date schedule. Phase order expresses dependencies
 ### Step 0.1: Close specification edge cases
 
 - [x] P0.1a: Confirm what an invite holder may see before claiming. Recommend a minimal claim screen containing roster names and availability, but no wishlists, private event details, or assignments.
-- [x] P0.1b: Confirm deletion eligibility after drawing has been enabled and subsequently reset. Recommend tracking whether drawing has ever been enabled and preventing permanent deletion thereafter.
+- [x] P0.1b: Confirm deletion eligibility after drawing has been enabled and subsequently reset. The original lifetime-history recommendation is superseded by the approved Phase 5 rollback: a confirmed reset erases the draw, including after reveals, and restores deletion eligibility; users must be warned participants may remember old recipients.
 - [x] P0.1c: Confirm account deletion for the sole admin and for active exchanges. Recommend requiring admin transfer or cancellation before admin deletion; preserve participant references as tombstones without reassigning recipients.
 - [x] P0.1d: Clarify that archiving freezes event operations, not the user's global wishlist; decide whether already revealed recipients remain readable in archived/cancelled events. Recommend retaining previously revealed access without allowing new reveals.
 - [x] P0.1e: Define supported gift currencies, price precision/ranges, input size limits, invite lifetime, and session/token lifetimes. Recommend EUR/PLN for gift prices, nonnegative decimal values, and bounded configurable limits.
@@ -221,15 +221,15 @@ The Phase 4 implementation is ready for user review at the local review URL. Pha
 
 - [x] P5.2a: Implement a current-user-only reveal endpoint with event locking and idempotent repeat behavior.
 - [x] P5.2b: Build disabled/available/revealed UI states and a brief reveal animation honoring reduced-motion preferences.
-- [x] P5.2c: Add explicit reset confirmation; clear assignments only if no reveal exists and keep drawing history for deletion rules.
+- [x] P5.2c: Add explicit reset confirmation; after any reveal, allow the admin to erase the entire draw and restore pre-draw setup/deletion eligibility, warning that recipients may already be known.
 - [x] P5.2d: Expose reveal status to the admin without recipient identities in any response or log.
-- [x] P5.2e: Test reveal versus reset/cancellation races, repeat requests, admin recipient-access denial, and disabled/reset states. The cancellation race test exercises the serialized cancellation state transition; the public lifecycle endpoint is delivered in Phase 6.
+- [x] P5.2e: Test reveal versus reset/cancellation races, repeat requests, admin recipient-access denial, and disabled/reset states. Reset wins safely if it serializes after reveal and erases the generation; the cancellation race test exercises the serialized cancellation state transition, while its public endpoint is delivered in Phase 6.
 
-**Acceptance:** Every roster entry has one non-self recipient regardless of claim status; no admin or other participant can inspect a claimed member's mapping; the first reveal irrevocably blocks reset.
+**Acceptance:** Every roster entry has one non-self recipient regardless of claim status; no admin or other participant can inspect a claimed member's mapping; the admin can return the event to pre-draw setup after a warning at any point before cancellation/archive.
 
 ### Phase 5 Verification Checkpoint
 
-Verified locally on 2026-10-23: 73 backend unit/API tests and 16 PostgreSQL integration tests pass, including migration upgrade/downgrade, relational assignment constraints, deterministic derangement generation and rollback, unclaimed-entry participation, claim/roster changes versus drawing, and reveal versus reset/cancellation transitions. All 33 frontend tests pass; frontend type-check and production build pass. Python flake8 and GOOGLE-profile isort pass. ESLint exits successfully with existing Vue template-format warnings in compact event-detail markup. The full 28-test desktop/mobile Playwright suite passes in English and Polish using the documented Playwright container. Hosted GitHub Actions has not been run.
+Verified locally on 2026-10-23: 74 backend unit/API tests and 16 PostgreSQL integration tests pass, including migration upgrade/downgrade, relational assignment constraints, deterministic derangement generation and rollback, unclaimed-entry participation, claim/roster changes versus drawing, and reveal/reset/cancellation races. All 34 frontend tests pass; frontend type-check, lint error gate, and production build pass. Python flake8 and GOOGLE-profile isort pass. The full 28-test desktop/mobile Playwright suite passes in English and Polish, including reset after reveal followed by a second draw and reveal. Hosted GitHub Actions has not been run.
 
 Phase 5 is ready for user review at the local review URL. Phase 6 remains blocked until this phase is verified and separately authorized.
 
@@ -245,7 +245,7 @@ Phase 5 is ready for user review at the local review URL. Phase 6 remains blocke
 - [ ] P6.1a: Implement archive/unarchive, cancellation, and permanent deletion rules using centralized state guards.
 - [ ] P6.1b: Implement admin transfer as a single transaction to an existing participant.
 - [ ] P6.1c: Build confirmation pages/controls and read-only cancelled/archived views; preserve date grouping independently.
-- [ ] P6.1d: Test every mutation against archived/cancelled states, concurrent transfer, post-reset deletion eligibility, and retained reveal access.
+- [ ] P6.1d: Test every mutation against archived/cancelled states, concurrent transfer, deletion eligibility after a full post-reveal reset, and retained reveal access when no reset occurs.
 
 ### Step 6.2: Account deletion
 

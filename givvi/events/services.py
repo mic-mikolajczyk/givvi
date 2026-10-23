@@ -277,14 +277,10 @@ def reset_drawing(database: Session, event: Event) -> dict:
     ).with_for_update())
     if not draw:
         raise ApiError("draw_unavailable", 503)
-    revealed_count = database.scalar(select(func.count()).select_from(EventAssignment).where(
-        EventAssignment.draw_id == draw.id, EventAssignment.revealed_at.is_not(None),
-    )) or 0
-    if revealed_count:
-        raise ApiError("drawing_already_revealed", 409)
     database.execute(delete(EventAssignment).where(EventAssignment.draw_id == draw.id))
-    draw.reset_at = now()
+    database.delete(draw)
     event.drawing_enabled = False
+    event.drawing_ever_enabled = False
     database.flush()
     return drawing_status(database, event, None)
 

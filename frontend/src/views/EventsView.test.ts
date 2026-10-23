@@ -203,6 +203,51 @@ describe('event management views', () => {
     wrapper.unmount()
   })
 
+  it('lets the admin reset after a reveal and returns to roster setup', async () => {
+    const revealedEvent = {
+      ...event,
+      drawing_enabled: true,
+      participants: [
+        { id: 'participant-1', name: 'Morgan', claimed: true },
+        { id: 'participant-2', name: 'Riley', claimed: true },
+        { id: 'participant-3', name: 'Taylor', claimed: false },
+      ],
+    }
+    request.mockImplementation((path: string, ...args: unknown[]) => {
+      if (path === '/events/event-1') return Promise.resolve({ event: revealedEvent })
+      if (path === '/events/event-1/invite-link') return Promise.reject(new ApiError('not_found'))
+      if (path === '/events/event-1/drawing' && args[2] === 'DELETE') {
+        return Promise.resolve({ drawing: { enabled: false, participant_count: 3, revealed_count: 0, has_revealed: false } })
+      }
+      if (path === '/events/event-1/drawing') {
+        return Promise.resolve({ drawing: { enabled: true, participant_count: 3, revealed_count: 1, has_revealed: false } })
+      }
+      return Promise.reject(new Error(`Unexpected request: ${path}`))
+    })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const router = createRouter({ history: createMemoryHistory(), routes: [
+      { path: '/events', component: { template: '<div />' } },
+      { path: '/events/:eventId', component: EventDetailView },
+    ] })
+    await router.push('/events/event-1')
+    await router.isReady()
+    const wrapper = mount({ template: '<RouterView />' }, {
+      global: { plugins: [router, createI18n({ legacy: false, locale: 'en', messages })] },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('button[aria-label="Reset drawing"]').exists()).toBe(true)
+    expect(wrapper.get('.drawing-reset-warning').text()).toContain('may already know their old recipient')
+    await wrapper.get('button[aria-label="Reset drawing"]').trigger('click')
+    await flushPromises()
+
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('including revealed ones'))
+    expect(request).toHaveBeenCalledWith('/events/event-1/drawing', {}, true, 'DELETE')
+    expect(wrapper.find('input[name="participant_name"]').exists()).toBe(true)
+    expect(wrapper.find('button[aria-label="Enable drawing"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
   it('reveals only the signed-in participant recipient on demand', async () => {
     const drawnEvent = {
       ...event,

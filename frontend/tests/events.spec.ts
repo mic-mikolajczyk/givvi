@@ -187,7 +187,33 @@ for (const language of ['en', 'pl'] as const) {
 
     await page.reload()
     await expect(page.getByText(copy.progress)).toBeVisible()
-    await expect(page.getByRole('button', { name: copy.reset })).toHaveCount(0)
+    await expect(page.getByText(copy.rosterMessage)).toHaveCount(0)
+    await expect(page.getByRole('button', { name: copy.reset })).toBeVisible()
+    await expect(page.getByText(language === 'en'
+      ? 'Resetting deletes all assignments, including revealed ones. Participants may already know their old recipient.'
+      : 'Reset usuwa wszystkie przydziały, również już odkryte. Uczestnicy mogą znać poprzednio wylosowane osoby.',
+    )).toBeVisible()
+    page.once('dialog', (dialog) => dialog.accept())
+    await page.getByRole('button', { name: copy.reset }).click()
+    await expect(page.getByRole('button', { name: copy.enable })).toBeVisible()
+    await expect(page.locator('input[name="participant_name"]')).toBeVisible()
+    await page.getByRole('button', { name: copy.enable }).click()
+
+    const reassignedRecipients = []
+    for (const member of memberPages) {
+      await member.page.reload()
+      await member.page.getByRole('button', { name: copy.reveal }).click()
+      await expect(member.page.getByText(copy.ownRecipient)).toBeVisible()
+      const recipient = await member.page.locator('.recipient-reveal strong').innerText()
+      expect(recipient).not.toBe(member.name)
+      reassignedRecipients.push(recipient)
+    }
+    expect(new Set(reassignedRecipients).size).toBe(claimedNames.length)
+    expect(reassignedRecipients).toContain('Taylor')
+
+    await page.reload()
+    await expect(page.getByText(copy.progress)).toBeVisible()
+    await expect(page.getByRole('button', { name: copy.reset })).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await page.screenshot({ path: testInfo.outputPath(`drawing-${language}.png`), fullPage: true })
     await Promise.all(contexts.map((context) => context.close()))

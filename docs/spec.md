@@ -85,7 +85,7 @@ An account may claim at most one roster entry in an event, and a roster entry ma
 - Past status does not make an event read-only. Archiving makes an event read-only for all participants. The admin may unarchive it.
 - The dashboard shows the event details, roster, participant claim status, drawing status, and relevant pending states.
 - A cancelled event remains visible to its participants as read-only with a clear cancelled status. No new assignments are generated or revealed after cancellation.
-- The admin may permanently delete an event only before drawing is enabled. After drawing is enabled, the admin can cancel or archive it instead.
+- The admin may permanently delete an event only when drawing is not enabled and drawing has not previously been enabled without a reset. Resetting returns the event to pre-draw deletion eligibility.
 - The admin may transfer admin ownership to another event participant. Only one admin is active at a time.
 
 ### Roster, invitations, and claims
@@ -109,8 +109,8 @@ An account may claim at most one roster entry in an event, and a roster entry ma
 - Before reveal, a claimed participant's dashboard indicates that drawing is available; after reveal, it shows the assigned recipient instead of the reveal control.
 - The reveal may use a brief animation or delay, but assignment correctness and privacy must not depend on client-side behavior.
 - The admin can see reveal status but cannot see assignment recipients.
-- Resetting is an explicit admin action with a confirmation step. It is allowed only before any participant has revealed. Reset clears all assignments and permits roster changes. A new draw may produce the same pairings as a previous draw.
-- Once any participant has revealed, the roster and assignments cannot be reset. If the exchange must stop, the admin cancels the event rather than reshuffling.
+- Resetting is an explicit admin action with a confirmation step. It is allowed while an event is writable, even after recipients have been revealed. The warning must state that participants may already know their previous recipients. Reset deletes all assignments and the current draw generation, clears drawing history flags, returns the event to setup and deletion-eligible state, and permits roster/claim changes. A new draw may produce the same pairings as a previous draw.
+- Resetting does not erase recipients from participants' memories or devices that are already displaying them. After reset, the server no longer returns the old assignments; participants must reveal again after the admin enables a new draw.
 
 ## 8. Wishlist Requirements
 
@@ -177,7 +177,7 @@ An account may claim at most one roster entry in an event, and a roster entry ma
 - The admin cannot enable drawing with fewer than three roster entries. Claim status does not affect eligibility, and unclaimed entries remain part of the assignment.
 - A valid draw assigns every participant exactly one other participant, with no self-assignment or duplicate recipient.
 - Only a participant can reveal their own assignment. The admin cannot inspect recipient identities through the application.
-- An explicit reset is blocked after the first reveal; cancellation remains available to the admin.
+- An admin can explicitly reset an active draw even after reveals; the warning explains that previous recipients may already be known. Reset removes all assignments and restores setup/deletion eligibility.
 - Users can manage and prioritize wishlist gifts. Event participants can view them without editing them.
 - Over-budget highlighting is correct when gift and event currencies match and omitted when they differ.
 - Archived and cancelled events are read-only; past status alone does not make an event read-only.
@@ -189,7 +189,7 @@ An account may claim at most one roster entry in an event, and a roster entry ma
 The following defaults were approved before implementation. They refine the requirements above and are acceptance criteria for the relevant delivery phases.
 
 - Before claiming an entry, a signed-in invite holder can see only roster names and entry availability. Private event details, wishlists, and assignments remain inaccessible until membership is established.
-- Permanent event deletion is allowed only if drawing has never been enabled. Resetting does not restore deletion eligibility.
+- Permanent event deletion is allowed only when drawing is not currently enabled. Resetting a draw, even after reveals, restores pre-draw deletion eligibility by clearing drawing history flags.
 - The organizer is not automatically a participant and must claim a roster entry to join the exchange.
 - Deleting an account requires transferring its admin ownership or cancelling affected events first. Existing assignments retain anonymized participant references and are never reassigned as a side effect of deletion.
 - Archiving freezes event operations, not users' global wishlists. Previously revealed recipients remain readable in archived and cancelled events, but new reveals are blocked. Unarchiving restores event operations only when the event is not cancelled.
@@ -202,3 +202,4 @@ The following defaults were approved before implementation. They refine the requ
 ## 15. Approved Phase 5 Clarification
 
 - Drawing requires at least three defined roster entries, not three claims. Every roster entry participates in the assignment even when it is unclaimed. Claiming and roster changes remain locked while drawing is enabled; therefore an entry unclaimed at enablement has no account that can reveal its giver assignment until the drawing is reset before any reveal.
+- **Superseding the earlier Phase 0 reset clarification:** the admin may reset an active draw after any number of reveals. Reset deletes the complete draw and assignment records, restores setup and deletion eligibility, and requires explicit confirmation that participants may already know the previous recipients.
