@@ -17,6 +17,8 @@ from givvi.models import EmailMessage
 from givvi.models import Event
 from givvi.models import EventAssignment
 from givvi.models import EventDraw
+from givvi.models import EventParticipant
+from givvi.models import User
 
 
 def register(client, app, email: str, name: str = "Alice", language: str = "en") -> str:
@@ -163,12 +165,20 @@ def test_admin_manages_unclaimed_roster_and_other_users_cannot_access_event(acco
     assert admin.get(f"/api/events/{event_id}").json["event"]["participants"] == []
 
 
-def test_event_edit_and_roster_mutation_reject_read_only_state(account_app) -> None:
+@pytest.mark.parametrize("read_only_state", ["archived", "cancelled", "drawing_enabled"])
+def test_event_edit_and_roster_mutation_reject_read_only_state(account_app, read_only_state: str) -> None:
     client = account_app.test_client()
     csrf = register(client, account_app, "owner@example.com")
     event_id = create_event(client, account_app, csrf).json["event"]["id"]
     with Session(account_app.extensions["database"]) as database, database.begin():
-        database.get(Event, event_id).archived = True
+        event = database.get(Event, event_id)
+        if read_only_state == "archived":
+            event.archived = True
+        elif read_only_state == "cancelled":
+            event.cancelled = True
+        else:
+            event.drawing_enabled = True
+            event.drawing_ever_enabled = True
 
     headers = {"X-CSRF-Token": csrf, "Origin": account_app.config["APP_ORIGIN"]}
     event_update = client.patch(f"/api/events/{event_id}", json={"name": "Changed"}, headers=headers)
@@ -176,6 +186,201 @@ def test_event_edit_and_roster_mutation_reject_read_only_state(account_app) -> N
 
     assert event_update.status_code == 409
     assert roster_add.status_code == 409
+
+
+def test_event_lifecycle_archive_cancel_and_delete_rules(account_app) -> None:
+    client = account_app.test_client()
+    csrf = register(client, account_app, "lifecycle@example.com")
+    event_id = create_event(client, account_app, csrf).json["event"]["id"]
+    headers = {"X-CSRF-Token": csrf, "Origin": account_app.config["APP_ORIGIN"]}
+
+    archived = client.post(f"/api/events/{event_id}/archive", headers=headers)
+
+    assert archived.status_code == 200
+    assert archived.json["event"]["archived"] is True
+    assert client.patch(f"/api/events/{event_id}", json={"name": "Changed"}, headers=headers).status_code == 409
+
+    unarchived = client.delete(f"/api/events/{event_id}/archive", headers=headers)
+
+    assert unarchived.status_code == 200
+    assert unarchived.json["event"]["archived"] is False
+
+    cancelled = client.post(f"/api/events/{event_id}/cancel", headers=headers)
+
+    assert cancelled.status_code == 200
+    assert cancelled.json["event"]["cancelled"] is True
+    assert client.delete(f"/api/events/{event_id}/archive", headers=headers).status_code == 409
+    assert client.delete(f"/api/events/{event_id}", headers=headers).status_code == 200
+
+
+def test_event_delete_requires_draw_to_be_reset(account_app) -> None:
+    admin, csrf, event_id, _ = create_claimed_event(account_app, 3, "lifecycle-draw")
+    headers = {"X-CSRF-Token": csrf, "Origin": account_app.config["APP_ORIGIN"]}
+
+    enabled = post(admin, account_app, csrf, f"/api/events/{event_id}/drawing", {})
+    assert enabled.status_code == 200
+    assert admin.delete(f"/api/events/{event_id}", headers=headers).status_code == 409
+
+    reset = admin.delete(f"/api/events/{event_id}/drawing", headers=headers)
+    assert reset.status_code == 200
+    assert admin.delete(f"/api/events/{event_id}", headers=headers).status_code == 200
+
+
+def test_admin_transfers_ownership_to_claimed_participant(account_app) -> None:
+    admin = account_app.test_client()
+    admin_csrf = register(admin, account_app, "transfer-admin@example.com")
+    event_id = create_event(admin, account_app, admin_csrf).json["event"]["id"]
+    participant_id = post(admin, account_app, admin_csrf, f"/api/events/{event_id}/participants", {
+        "name": "Member",
+    }).json["participant"]["id"]
+    invite_link = post(admin, account_app, admin_csrf, f"/api/events/{event_id}/invite-link", {}).json["link"]
+    token = parse_qs(urlsplit(invite_link).fragment)["token"][0]
+    member = account_app.test_client()
+    member_csrf = register(member, account_app, "transfer-member@example.com")
+    assert post(member, account_app, member_csrf, f"/api/events/{event_id}/claim", {
+        "participant_id": participant_id, "token": token,
+    }).status_code == 200
+    headers = {"X-CSRF-Token": admin_csrf, "Origin": account_app.config["APP_ORIGIN"]}
+    member_transfer = post(member, account_app, member_csrf, f"/api/events/{event_id}/transfer", {
+        "participant_id": participant_id,
+    })
+    assert member_transfer.status_code == 403
+
+    transferred = admin.post(f"/api/events/{event_id}/transfer", json={"participant_id": participant_id},
+                             headers=headers)
+
+    assert transferred.status_code == 200
+    assert transferred.json["event"]["is_admin"] is False
+    assert member.get(f"/api/events/{event_id}").json["event"]["is_admin"] is True
+    assert admin.post(f"/api/events/{event_id}/participants", json={"name": "No longer admin"},
+                      headers=headers).status_code == 404
+
+
+def test_admin_transfer_rejects_unclaimed_roster_entry(account_app) -> None:
+    client = account_app.test_client()
+    csrf = register(client, account_app, "transfer-unclaimed@example.com")
+    event_id = create_event(client, account_app, csrf).json["event"]["id"]
+    participant_id = post(client, account_app, csrf, f"/api/events/{event_id}/participants", {
+        "name": "Not claimed",
+    }).json["participant"]["id"]
+
+    response = post(client, account_app, csrf, f"/api/events/{event_id}/transfer", {"participant_id": participant_id})
+
+    assert response.status_code == 409
+
+
+@pytest.mark.parametrize("lifecycle_action", ["archive", "cancel"])
+def test_admin_transfer_is_blocked_for_read_only_event(account_app, lifecycle_action: str) -> None:
+    client = account_app.test_client()
+    csrf = register(client, account_app, f"transfer-readonly-{lifecycle_action}@example.com")
+    event_id = create_event(client, account_app, csrf).json["event"]["id"]
+    headers = {"X-CSRF-Token": csrf, "Origin": account_app.config["APP_ORIGIN"]}
+    assert client.post(f"/api/events/{event_id}/{lifecycle_action}", headers=headers).status_code == 200
+
+    response = post(client, account_app, csrf, f"/api/events/{event_id}/transfer", {"participant_id": "missing"})
+
+    assert response.status_code == 409
+    assert response.json["code"] == "event_read_only"
+
+
+@pytest.mark.parametrize("lifecycle_action", ["archive", "cancel"])
+def test_revealed_assignment_remains_readable_after_lifecycle_transition(account_app, lifecycle_action: str) -> None:
+    admin, admin_csrf, event_id, unused_participant_ids = create_claimed_event(
+        account_app, 3, f"retained-reveal-{lifecycle_action}",
+    )
+    member = account_app.test_client()
+    login_csrf = member.get("/api/auth/csrf").json["csrf_token"]
+    login = member.post("/api/auth/login", json={
+        "email": f"retained-reveal-{lifecycle_action}-0@example.com",
+        "password": "correct horse battery staple",
+    }, headers={"X-CSRF-Token": login_csrf, "Origin": account_app.config["APP_ORIGIN"]})
+    member_csrf = login.json["csrf_token"]
+    assert post(admin, account_app, admin_csrf, f"/api/events/{event_id}/drawing", {}).status_code == 200
+    revealed = post(member, account_app, member_csrf, f"/api/events/{event_id}/reveal", {})
+    assert revealed.status_code == 200
+
+    transition = post(admin, account_app, admin_csrf, f"/api/events/{event_id}/{lifecycle_action}", {})
+    repeated = post(member, account_app, member_csrf, f"/api/events/{event_id}/reveal", {})
+    unrevealed_member = account_app.test_client()
+    login_csrf = unrevealed_member.get("/api/auth/csrf").json["csrf_token"]
+    login = unrevealed_member.post("/api/auth/login", json={
+        "email": f"retained-reveal-{lifecycle_action}-1@example.com",
+        "password": "correct horse battery staple",
+    }, headers={"X-CSRF-Token": login_csrf, "Origin": account_app.config["APP_ORIGIN"]})
+    blocked_reveal = post(unrevealed_member, account_app, login.json["csrf_token"], f"/api/events/{event_id}/reveal", {})
+
+    assert transition.status_code == 200
+    assert repeated.status_code == 200
+    assert repeated.json["recipient"] == revealed.json["recipient"]
+    assert blocked_reveal.status_code == 409
+    assert blocked_reveal.json["code"] == "event_read_only"
+
+
+def test_account_deletion_anonymizes_roster_without_changing_assignments(account_app) -> None:
+    admin = account_app.test_client()
+    admin_csrf = register(admin, account_app, "privacy-admin@example.com")
+    event_id = create_event(admin, account_app, admin_csrf).json["event"]["id"]
+    participant_ids = [post(admin, account_app, admin_csrf, f"/api/events/{event_id}/participants", {
+        "name": f"Member {index}",
+    }).json["participant"]["id"] for index in range(3)]
+    invite_link = post(admin, account_app, admin_csrf, f"/api/events/{event_id}/invite-link", {}).json["link"]
+    token = parse_qs(urlsplit(invite_link).fragment)["token"][0]
+    clients = []
+    for index, participant_id in enumerate(participant_ids):
+        client = account_app.test_client()
+        csrf = register(client, account_app, f"privacy-member-{index}@example.com")
+        assert post(client, account_app, csrf, f"/api/events/{event_id}/claim", {
+            "participant_id": participant_id, "token": token,
+        }).status_code == 200
+        clients.append(client)
+    assert post(admin, account_app, admin_csrf, f"/api/events/{event_id}/drawing", {}).status_code == 200
+    with Session(account_app.extensions["database"]) as database:
+        assignments_before = set(database.execute(select(
+            EventAssignment.giver_participant_id, EventAssignment.recipient_participant_id,
+        )).all())
+        deleted_user_id = database.scalar(select(EventParticipant.user_id).where(
+            EventParticipant.id == participant_ids[0],
+        ))
+
+    deleting_client = clients[0]
+    csrf = deleting_client.get("/api/auth/csrf").json["csrf_token"]
+    deleted = deleting_client.delete("/api/auth/account", json={
+        "current_password": "correct horse battery staple",
+    }, headers={"X-CSRF-Token": csrf, "Origin": account_app.config["APP_ORIGIN"]})
+
+    assert deleted.status_code == 200
+    with Session(account_app.extensions["database"]) as database:
+        participant = database.get(EventParticipant, participant_ids[0])
+        assignments_after = set(database.execute(select(
+            EventAssignment.giver_participant_id, EventAssignment.recipient_participant_id,
+        )).all())
+        assert participant.name == "Deleted user"
+        assert participant.user_id is None
+        assert database.get(User, deleted_user_id) is None
+        assert assignments_after == assignments_before
+
+
+def test_account_deletion_before_drawing_keeps_anonymized_roster_entry(account_app) -> None:
+    admin, unused_admin_csrf, event_id, participant_ids = create_claimed_event(account_app, 3, "pre-draw-delete")
+    member = account_app.test_client()
+    csrf = member.get("/api/auth/csrf").json["csrf_token"]
+    login = member.post("/api/auth/login", json={
+        "email": "pre-draw-delete-0@example.com", "password": "correct horse battery staple",
+    }, headers={"X-CSRF-Token": csrf, "Origin": account_app.config["APP_ORIGIN"]})
+    user_id = login.json["user"]["id"]
+    csrf = login.json["csrf_token"]
+
+    deleted = member.delete("/api/auth/account", json={
+        "current_password": "correct horse battery staple",
+    }, headers={"X-CSRF-Token": csrf, "Origin": account_app.config["APP_ORIGIN"]})
+
+    assert deleted.status_code == 200
+    with Session(account_app.extensions["database"]) as database:
+        participant = database.get(EventParticipant, participant_ids[0])
+        assert participant.name == "Deleted user"
+        assert participant.user_id is None
+        assert database.get(User, user_id) is None
+        assert database.scalar(select(EventAssignment).where(EventAssignment.event_id == event_id)) is None
 
 
 def test_event_edit_preserves_omitted_values_and_updates_details(account_app) -> None:
@@ -595,7 +800,7 @@ def test_invitation_preview_is_rate_limited(account_app) -> None:
     assert second_preview.json["code"] == "rate_limited"
 
 
-@pytest.mark.parametrize("read_only_state", ["archived", "drawing_enabled"])
+@pytest.mark.parametrize("read_only_state", ["archived", "cancelled", "drawing_enabled"])
 def test_claim_is_rejected_when_event_becomes_read_only(account_app, read_only_state: str) -> None:
     admin = account_app.test_client()
     admin_csrf = register(admin, account_app, "readonly-admin@example.com")
@@ -607,6 +812,8 @@ def test_claim_is_rejected_when_event_becomes_read_only(account_app, read_only_s
         event = database.get(Event, event_id)
         if read_only_state == "archived":
             event.archived = True
+        elif read_only_state == "cancelled":
+            event.cancelled = True
         else:
             event.drawing_enabled = True
             event.drawing_ever_enabled = True

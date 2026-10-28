@@ -44,6 +44,7 @@ export interface EventRecord {
   is_admin: boolean
   is_participant?: boolean
   drawing_enabled: boolean
+  can_delete: boolean
   archived: boolean
   cancelled: boolean
   period: 'upcoming' | 'ongoing' | 'past'

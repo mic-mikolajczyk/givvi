@@ -10,6 +10,7 @@ from email_validator import EmailNotValidError
 from email_validator import validate_email
 from flask import current_app
 from sqlalchemy import delete
+from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy import update
 from sqlalchemy.orm import Session
@@ -18,14 +19,19 @@ from givvi.accounts.security import digest
 from givvi.accounts.security import now
 from givvi.accounts.security import utc
 from givvi.errors import ApiError
+from givvi.models import AccountDeletionRecord
 from givvi.models import AccountToken
 from givvi.models import EmailMessage
+from givvi.models import Event
+from givvi.models import EventParticipant
+from givvi.models import Gift
 from givvi.models import LoginSession
 from givvi.models import User
 from givvi.models import Wishlist
 
 MINIMUM_PASSWORD_LENGTH = 12
 MAXIMUM_PASSWORD_LENGTH = 128
+DELETED_USER_LABEL = "Deleted user"
 
 
 def normalized_email(value: object) -> str:
@@ -180,3 +186,47 @@ def change_email(database: Session, user: User, body: dict) -> None:
         raise ApiError("email_unavailable", 409)
     user.pending_email = email
     token_email(database, user, "email", email)
+
+
+def delete_account(database: Session, user: User, body: dict) -> None:
+    if not password_matches(user, body.get("current_password")):
+        raise ApiError("invalid_credentials", 401)
+    active_admin_event = database.scalar(select(Event.id).where(
+        Event.admin_id == user.id,
+        Event.cancelled.is_(False),
+    ).limit(1).with_for_update())
+    if active_admin_event:
+        raise ApiError("admin_events_require_handover", 409)
+
+    database.add(AccountDeletionRecord(user_id=user.id, deleted_at=now()))
+    _erase_account_data(database, user.id)
+
+
+def _erase_account_data(database: Session, user_id: str) -> None:
+    owned_event_ids = select(Event.id).where(Event.admin_id == user_id)
+    database.execute(delete(EmailMessage).where(or_(
+        EmailMessage.user_id == user_id,
+        EmailMessage.event_id.in_(owned_event_ids),
+    )))
+    database.execute(update(EventParticipant).where(EventParticipant.user_id == user_id).values(
+        name=DELETED_USER_LABEL,
+        user_id=None,
+    ))
+    database.execute(update(Event).where(Event.admin_id == user_id).values(
+        admin_id=None,
+        cancelled=True,
+        invite_token_hash=None,
+        invite_token_encrypted=None,
+    ))
+    database.execute(delete(Gift).where(Gift.wishlist_id == user_id))
+    database.execute(delete(Wishlist).where(Wishlist.user_id == user_id))
+    database.execute(delete(LoginSession).where(LoginSession.user_id == user_id))
+    database.execute(delete(AccountToken).where(AccountToken.user_id == user_id))
+    database.execute(delete(User).where(User.id == user_id))
+
+
+def reapply_account_deletions(database: Session) -> int:
+    records = list(database.scalars(select(AccountDeletionRecord)))
+    for record in records:
+        _erase_account_data(database, record.user_id)
+    return len(records)

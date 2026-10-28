@@ -10,7 +10,7 @@ Project verifies and indirectale measure how does AI affect software development
 
 ## Development Status
 
-Phases 0-4 are verified. Phase 5 implements private Secret Santa assignment, participant-only reveal, and pre-reveal reset, and is ready for review. Registration signs users in immediately without sending a verification email; password recovery and email-change confirmation remain supported. Event lifecycle and account cleanup remain later-phase work. Each phase is reviewed by the user before the next begins.
+Phases 0-5 are verified. Phase 6 implements event lifecycle controls, admin transfer, and account deletion, and is ready for review. Registration signs users in immediately without sending a verification email; password recovery and email-change confirmation remain supported. Each phase is reviewed by the user before the next begins.
 
 - [Product specification](docs/spec.md)
 - [Delivery plan](docs/plan.md)
@@ -78,11 +78,12 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Playwright starts development servers automatically if they are not running. Start the email worker first for account journeys. It uses the example database configuration unless `GIVVI_DATABASE_URL` is supplied. CI installs OS browser dependencies automatically. If your Linux host lacks those libraries, start the API/frontend/worker yourself and use this root-directory command instead:
+Playwright starts development servers automatically if they are not running. Start the email worker first for account journeys. It uses the example database configuration unless `GIVVI_DATABASE_URL` is supplied. CI installs OS browser dependencies automatically. If your Linux host lacks those libraries, start the API, frontend, and email worker yourself, then use this root-directory command. External-server mode prevents the container from trying to execute the host virtualenv:
 
 ```bash
 docker run --rm --network host --ipc host \
 	--user "$(id -u):$(id -g)" -e HOME=/tmp \
+	-e GIVVI_E2E_EXTERNAL_SERVERS=1 \
 	-v "$PWD:/workspace" -w /workspace/frontend \
 	mcr.microsoft.com/playwright:v1.63.0-noble npm run test:e2e
 ```
@@ -141,6 +142,21 @@ Screenshots and failure traces are written under the ignored frontend test-resul
 4. After at least one participant reveals, reset the drawing after reading and accepting the warning. Confirm the old assignments are removed, drawing is disabled, and roster/claim controls become available again.
 5. Enable a new draw and have every claimed participant reveal again. Confirm the old recipient is no longer returned by the API and the admin can still reset again. Check English and Polish on desktop and a narrow mobile viewport.
 6. Run `.venv/bin/python -m pytest -q`, the PostgreSQL integration suite, `npm --prefix frontend test`, and the browser suite. Review the Phase 5 checkpoint before authorizing Phase 6.
+
+## Phase 6 Review
+
+1. As an organizer, archive an event and confirm it is read-only; unarchive it and confirm editing returns. Cancel it and confirm it remains visible but read-only, with no invite or reveal actions.
+2. On a separate event, claim a roster entry from another account and transfer administration to that participant. Confirm the previous admin loses admin controls and the new admin gains them.
+3. Enable a draw, reveal a recipient, then archive or cancel the event. Confirm the participant can still read the same previously revealed recipient, while a participant who has not revealed cannot reveal after the transition.
+4. Try deleting an account that still administers an active event and confirm it is rejected. Cancel or transfer the event, then delete with the current password. Confirm sessions are revoked, the canceled event remains, participant names become “Deleted user,” and assignments do not change.
+5. Confirm a draw cannot be deleted until reset, including after a reveal; after reset, event deletion is available. Check English and Polish on desktop and a narrow mobile viewport.
+6. Run `.venv/bin/python -m pytest -q`, the PostgreSQL integration suite, `npm --prefix frontend test`, and the browser suite. Review the Phase 6 checkpoint before authorizing Phase 7.
+
+## Account Deletion and Backups
+
+Account deletion removes live profile, wishlist, credential, token, and queued account-message data. Retained event assignments are preserved, and claimed roster entries use the neutral “Deleted user” label. The `account_deletion_records` table retains only the opaque user ID and deletion timestamp so a restored snapshot can be sanitized again.
+
+Backups containing deleted profile data must expire within 30 days. Before restoring a snapshot, load the latest separately retained copy of `account_deletion_records` into the restored database, then run `.venv/bin/flask --env-file .env --app givvi reapply-account-deletions` before reopening access. The replay is idempotent and cancels/detaches any restored event still owned by a deleted account. Keep ledger exports access-controlled and separate from restorable snapshots; automated off-site ledger capture and backup restoration remain Phase 7 deployment gates. Logical deletion from the active database does not erase older retained backups immediately.
 
 ## Upgrading Existing Development Data
 

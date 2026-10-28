@@ -50,6 +50,7 @@ def event_view(event: Event, user_id: str, participants: list[EventParticipant])
         "is_admin": event.admin_id == user_id,
         "is_participant": any(participant.user_id == user_id for participant in participants),
         "drawing_enabled": event.drawing_enabled,
+        "can_delete": not event.drawing_enabled and not event.drawing_ever_enabled,
         "archived": event.archived,
         "cancelled": event.cancelled,
         "participants": [
@@ -285,6 +286,46 @@ def reset_drawing(database: Session, event: Event) -> dict:
     return drawing_status(database, event, None)
 
 
+def archive_event(event: Event) -> None:
+    if event.cancelled:
+        raise ApiError("event_read_only", 409)
+    event.archived = True
+
+
+def unarchive_event(event: Event) -> None:
+    if event.cancelled:
+        raise ApiError("event_read_only", 409)
+    event.archived = False
+
+
+def cancel_event(database: Session, event: Event) -> None:
+    event.cancelled = True
+    event.invite_token_hash = None
+    event.invite_token_encrypted = None
+    database.execute(delete(EmailMessage).where(EmailMessage.event_id == event.id))
+
+
+def delete_event(database: Session, event: Event) -> None:
+    if event.drawing_enabled or event.drawing_ever_enabled:
+        raise ApiError("event_delete_blocked", 409)
+    database.execute(delete(EmailMessage).where(EmailMessage.event_id == event.id))
+    database.delete(event)
+
+
+def transfer_admin(database: Session, event: Event, participant_id: object) -> None:
+    if event.archived or event.cancelled:
+        raise ApiError("event_read_only", 409)
+    if not isinstance(participant_id, str):
+        raise ApiError("invalid_request", 400)
+    participant = database.scalar(select(EventParticipant).where(
+        EventParticipant.id == participant_id,
+        EventParticipant.event_id == event.id,
+    ).with_for_update())
+    if not participant or not participant.user_id or participant.user_id == event.admin_id:
+        raise ApiError("transfer_target_invalid", 409)
+    event.admin_id = participant.user_id
+
+
 def add_participant(database: Session, event: Event, name: object) -> EventParticipant:
     require_writable(event)
     participants = roster(database, event.id, lock=True)
@@ -404,6 +445,7 @@ def queue_invitation_email(database: Session, event: Event, email_value: object)
     encrypted = Fernet(current_app.config["OUTBOX_KEY"].encode()).encrypt(payload.encode()).decode()
     database.add(EmailMessage(
         user_id=recipient.id if recipient else None,
+        event_id=event.id,
         payload=encrypted,
         available_at=now(),
         expires_at=now() + timedelta(days=INVITATION_EMAIL_RETENTION_DAYS),

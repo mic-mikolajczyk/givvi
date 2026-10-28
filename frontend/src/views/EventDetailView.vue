@@ -1,26 +1,30 @@
 <script setup lang="ts">
 import {
-  ArrowLeft, Copy, Eye, Gift, Mail, Pencil, Plus, RotateCcw, Save, Shuffle, Trash2, Unlink, UserRound, X,
+  Archive, ArrowLeft, Copy, Eye, Gift, Mail, Pencil, Plus, RotateCcw, Save, Shuffle, Trash2, Unlink, UserRound, X,
 } from '@lucide/vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
+import { useRouter } from 'vue-router'
 
 import { ApiError, request, type DrawingStatus, type EventParticipant, type EventRecord } from '../api'
 
 const { t, locale } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const event = ref<EventRecord | null>(null)
 const drawingStatus = ref<DrawingStatus | null>(null)
 const ownRecipient = ref<EventParticipant | null>(null)
 const loading = ref(true)
 const saving = ref(false)
 const drawingBusy = ref(false)
+const lifecycleBusy = ref(false)
 const editingDetails = ref(false)
 const error = ref('')
 const notice = ref('')
 const participantName = ref('')
 const inviteEmail = ref('')
+const transferTarget = ref('')
 const inviteLink = ref('')
 const editingParticipant = ref('')
 const editingName = ref('')
@@ -96,7 +100,10 @@ async function enableDrawing() {
   error.value = ''
   try {
     const payload = await request<{ drawing: DrawingStatus }>(`/events/${eventId.value}/drawing`, {})
-    if (event.value) event.value.drawing_enabled = true
+    if (event.value) {
+      event.value.drawing_enabled = true
+      event.value.can_delete = false
+    }
     drawingStatus.value = payload.drawing
     notice.value = 'drawing_enabled'
   } catch (failure) {
@@ -126,7 +133,10 @@ async function resetDrawing() {
   error.value = ''
   try {
     const payload = await request<{ drawing: DrawingStatus }>(`/events/${eventId.value}/drawing`, {}, true, 'DELETE')
-    if (event.value) event.value.drawing_enabled = false
+    if (event.value) {
+      event.value.drawing_enabled = false
+      event.value.can_delete = true
+    }
     drawingStatus.value = payload.drawing
     ownRecipient.value = null
     await loadInviteLink()
@@ -135,6 +145,50 @@ async function resetDrawing() {
     error.value = failure instanceof ApiError ? failure.code : 'service_unavailable'
   } finally {
     drawingBusy.value = false
+  }
+}
+
+async function changeLifecycle(action: 'archive' | 'unarchive' | 'cancel' | 'delete') {
+  if (!event.value) return
+  const confirmationKeys = {
+    archive: 'confirmArchiveEvent', unarchive: '', cancel: 'confirmCancelEvent', delete: 'confirmDeleteEvent',
+  }
+  const confirmationKey = confirmationKeys[action]
+  if (confirmationKey && !window.confirm(t(confirmationKey))) return
+  lifecycleBusy.value = true
+  error.value = ''
+  try {
+    if (action === 'delete') {
+      await request(`/events/${eventId.value}`, {}, true, 'DELETE')
+      await router.replace('/events')
+      return
+    }
+    const path = action === 'cancel' ? `/events/${eventId.value}/cancel` : `/events/${eventId.value}/archive`
+    const method = action === 'unarchive' ? 'DELETE' : 'POST'
+    const payload = await request<{ event: EventRecord }>(path, {}, true, method)
+    if (event.value) Object.assign(event.value, payload.event)
+    if (action === 'archive' || action === 'cancel') editingDetails.value = false
+    inviteLink.value = ''
+    if (action === 'unarchive') await loadInviteLink()
+    notice.value = `event_${action === 'cancel' ? 'cancelled' : `${action}d`}`
+  } catch (failure) {
+    error.value = failure instanceof ApiError ? failure.code : 'service_unavailable'
+  } finally {
+    lifecycleBusy.value = false
+  }
+}
+
+async function transferAdmin() {
+  if (!transferTarget.value || !window.confirm(t('confirmTransferAdmin'))) return
+  lifecycleBusy.value = true
+  error.value = ''
+  try {
+    await request(`/events/${eventId.value}/transfer`, { participant_id: transferTarget.value })
+    await router.replace('/events')
+  } catch (failure) {
+    error.value = failure instanceof ApiError ? failure.code : 'service_unavailable'
+  } finally {
+    lifecycleBusy.value = false
   }
 }
 
@@ -368,7 +422,61 @@ watch(eventId, loadEvent, { immediate: true })
         </dl>
       </section>
 
-      <form v-else class="event-form detail-form" @submit.prevent="saveEvent">
+      <section v-if="event.is_admin" class="event-lifecycle-section">
+        <div class="section-heading"><h2>{{ t('eventManagement') }}</h2></div>
+        <div class="lifecycle-actions">
+          <button
+            v-if="!event.archived && !event.cancelled"
+            class="secondary-button"
+            type="button"
+            :aria-label="t('archiveEvent')"
+            :disabled="lifecycleBusy"
+            @click="changeLifecycle('archive')"
+          ><Archive :size="18" aria-hidden="true" />{{ t('archiveEvent') }}</button>
+          <button
+            v-if="event.archived && !event.cancelled"
+            class="secondary-button"
+            type="button"
+            :aria-label="t('unarchiveEvent')"
+            :disabled="lifecycleBusy"
+            @click="changeLifecycle('unarchive')"
+          ><Archive :size="18" aria-hidden="true" />{{ t('unarchiveEvent') }}</button>
+          <button
+            v-if="!event.cancelled"
+            class="secondary-button danger-button"
+            type="button"
+            :aria-label="t('cancelEvent')"
+            :disabled="lifecycleBusy"
+            @click="changeLifecycle('cancel')"
+          ><X :size="18" aria-hidden="true" />{{ t('cancelEvent') }}</button>
+          <button
+            v-if="event.can_delete"
+            class="secondary-button danger-button"
+            type="button"
+            :aria-label="t('deleteEvent')"
+            :disabled="lifecycleBusy"
+            @click="changeLifecycle('delete')"
+          ><Trash2 :size="18" aria-hidden="true" />{{ t('deleteEvent') }}</button>
+        </div>
+        <form
+          v-if="!event.archived && !event.cancelled && event.participants.some((participant) => participant.claimed)"
+          class="admin-transfer-form"
+          @submit.prevent="transferAdmin"
+        >
+          <label :for="`transfer-target-${event.id}`">{{ t('transferTo') }}</label>
+          <select :id="`transfer-target-${event.id}`" v-model="transferTarget" required :disabled="lifecycleBusy">
+            <option disabled value="">{{ t('transferTo') }}</option>
+            <option v-for="participant in event.participants.filter((item) => item.claimed)" :key="participant.id" :value="participant.id">
+              {{ participant.name }}
+            </option>
+          </select>
+          <button class="secondary-button" type="submit" :disabled="lifecycleBusy || !transferTarget">
+            {{ t('transferAdmin') }}
+          </button>
+        </form>
+      </section>
+
+      <form v-if="editingDetails" class="event-form detail-form" @submit.prevent="saveEvent">
         <div class="section-heading"><h2>{{ t('editEvent') }}</h2></div>
         <fieldset :disabled="saving">
           <label><span>{{ t('eventName') }}</span><input v-model="form.name" name="name" maxlength="120" required></label>

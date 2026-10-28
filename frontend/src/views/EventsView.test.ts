@@ -6,11 +6,13 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { messages } from '../i18n'
 import EventsView from './EventsView.vue'
 import EventDetailView from './EventDetailView.vue'
+import ProfileView from './ProfileView.vue'
 
-const { ApiError, currentUser, publicRequest, refreshUser, request } = vi.hoisted(() => ({
+const { ApiError, clearSession, currentUser, publicRequest, refreshUser, request } = vi.hoisted(() => ({
   request: vi.fn(),
   publicRequest: vi.fn(),
   refreshUser: vi.fn(),
+  clearSession: vi.fn(),
   currentUser: {
     __v_isRef: true,
     value: null as null | { id: string; name: string; email: string; language: 'en' | 'pl'; pending_email: null },
@@ -23,12 +25,12 @@ const { ApiError, currentUser, publicRequest, refreshUser, request } = vi.hoiste
     }
   },
 }))
-vi.mock('../api', () => ({ request, publicRequest, refreshUser, currentUser, ApiError }))
+vi.mock('../api', () => ({ request, publicRequest, refreshUser, clearSession, currentUser, ApiError }))
 
 const event = {
   id: 'event-1', name: 'Winter exchange', exchange_date: '2026-12-20', exchange_time: null,
   time_zone: 'Europe/Warsaw', location: null, description: null, currency: 'EUR', budget: null,
-  is_admin: true, drawing_enabled: false, archived: false, cancelled: false, period: 'upcoming',
+  is_admin: true, drawing_enabled: false, can_delete: true, archived: false, cancelled: false, period: 'upcoming',
   participants: [],
 }
 
@@ -38,6 +40,10 @@ describe('event management views', () => {
     publicRequest.mockReset()
     refreshUser.mockReset()
     currentUser.value = null
+    event.archived = false
+    event.cancelled = false
+    event.drawing_enabled = false
+    event.participants.splice(0)
     sessionStorage.clear()
   })
 
@@ -200,6 +206,7 @@ describe('event management views', () => {
 
     expect(request).toHaveBeenCalledWith('/events/event-1/drawing', {})
     expect(wrapper.text()).toContain('Drawing enabled')
+    expect(wrapper.find('button[aria-label="Delete event"]').exists()).toBe(false)
     wrapper.unmount()
   })
 
@@ -207,6 +214,7 @@ describe('event management views', () => {
     const revealedEvent = {
       ...event,
       drawing_enabled: true,
+      can_delete: false,
       participants: [
         { id: 'participant-1', name: 'Morgan', claimed: true },
         { id: 'participant-2', name: 'Riley', claimed: true },
@@ -245,6 +253,7 @@ describe('event management views', () => {
     expect(request).toHaveBeenCalledWith('/events/event-1/drawing', {}, true, 'DELETE')
     expect(wrapper.find('input[name="participant_name"]').exists()).toBe(true)
     expect(wrapper.find('button[aria-label="Enable drawing"]').exists()).toBe(true)
+    expect(wrapper.find('button[aria-label="Delete event"]').exists()).toBe(true)
     wrapper.unmount()
   })
 
@@ -507,6 +516,106 @@ describe('event management views', () => {
     expect((wrapper.get('input[readonly]').element as HTMLInputElement).value).toBe('active-link')
     expect(wrapper.find('form.invitation-email-form').exists()).toBe(false)
     expect(wrapper.find('button[aria-label="Revoke link"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('archives, restores, and cancels an event through lifecycle controls', async () => {
+    const archived = { ...event, archived: true }
+    const cancelled = { ...event, cancelled: true }
+    request.mockImplementation((path: string, _body?: object, _retry?: boolean, method?: string) => {
+      if (path === '/events/event-1' && !method) return Promise.resolve({ event })
+      if (path === '/events/event-1/invite-link') return Promise.reject(new ApiError('not_found'))
+      if (path === '/events/event-1/archive' && method === 'POST') return Promise.resolve({ event: archived })
+      if (path === '/events/event-1/archive' && method === 'DELETE') return Promise.resolve({ event })
+      if (path === '/events/event-1/cancel') return Promise.resolve({ event: cancelled })
+      return Promise.reject(new Error(`Unexpected request: ${path}`))
+    })
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const router = createRouter({ history: createMemoryHistory(), routes: [
+      { path: '/events', component: { template: '<div />' } },
+      { path: '/events/:eventId', component: EventDetailView },
+    ] })
+    await router.push('/events/event-1')
+    await router.isReady()
+    const wrapper = mount({ template: '<RouterView />' }, {
+      global: { plugins: [router, createI18n({ legacy: false, locale: 'en', messages })] },
+    })
+    await flushPromises()
+
+    await wrapper.get('button.edit-event-button').trigger('click')
+    await wrapper.get('input[name="name"]').setValue('Unsaved name')
+    await wrapper.get('button[aria-label="Archive event"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Archived')
+    expect(wrapper.find('form.detail-form').exists()).toBe(false)
+    await wrapper.get('button[aria-label="Unarchive event"]').trigger('click')
+    await flushPromises()
+
+    await wrapper.get('button[aria-label="Cancel event"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('button').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Cancelled')
+    expect(request).toHaveBeenCalledWith('/events/event-1/cancel', {}, true, 'POST')
+    wrapper.unmount()
+  })
+
+  it('deletes the account only after confirmation and reauthentication', async () => {
+    request.mockResolvedValue({ code: 'account_deleted' })
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const router = createRouter({ history: createMemoryHistory(), routes: [
+      { path: '/profile', component: ProfileView },
+      { path: '/login', component: { template: '<div />' } },
+    ] })
+    await router.push('/profile')
+    await router.isReady()
+    const wrapper = mount({ template: '<RouterView />' }, {
+      global: { plugins: [router, createI18n({ legacy: false, locale: 'en', messages })] },
+    })
+    await flushPromises()
+
+    await wrapper.get('input[name="deletion-password"]').setValue('correct horse battery staple')
+    await wrapper.get('.danger-zone form').trigger('submit')
+    await flushPromises()
+
+    expect(request).toHaveBeenCalledWith('/auth/account', {
+      current_password: 'correct horse battery staple',
+    }, true, 'DELETE')
+    expect(clearSession).toHaveBeenCalledOnce()
+    expect(router.currentRoute.value.path).toBe('/login')
+    wrapper.unmount()
+  })
+
+  it('transfers event administration to a claimed roster participant', async () => {
+    const eventWithMember = {
+      ...event,
+      participants: [{ id: 'participant-1', name: 'Morgan', claimed: true }],
+    }
+    request.mockImplementation((path: string) => {
+      if (path === '/events/event-1') return Promise.resolve({ event: eventWithMember })
+      if (path === '/events/event-1/invite-link') return Promise.reject(new ApiError('not_found'))
+      if (path === '/events/event-1/transfer') return Promise.resolve({ event: { ...eventWithMember, is_admin: false } })
+      if (path === '/events?page=1&page_size=50') return Promise.resolve({ events: [], page: 1, total: 0 })
+      return Promise.reject(new Error(`Unexpected request: ${path}`))
+    })
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const router = createRouter({ history: createMemoryHistory(), routes: [
+      { path: '/events', component: EventsView },
+      { path: '/events/:eventId', component: EventDetailView },
+    ] })
+    await router.push('/events/event-1')
+    await router.isReady()
+    const wrapper = mount({ template: '<RouterView />' }, {
+      global: { plugins: [router, createI18n({ legacy: false, locale: 'en', messages })] },
+    })
+    await flushPromises()
+
+    await wrapper.get(`#transfer-target-${event.id}`).setValue('participant-1')
+    await wrapper.get('form.admin-transfer-form').trigger('submit')
+    await flushPromises()
+
+    expect(request).toHaveBeenCalledWith('/events/event-1/transfer', { participant_id: 'participant-1' })
+    expect(router.currentRoute.value.path).toBe('/events')
     wrapper.unmount()
   })
 })

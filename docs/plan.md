@@ -233,8 +233,8 @@ Verified locally on 2026-10-23: 74 backend unit/API tests and 16 PostgreSQL inte
 
 Phase 5 is ready for user review at the local review URL. Phase 6 remains blocked until this phase is verified and separately authorized.
 
-- [ ] User verifies Phase 5 using the [README review steps](../README.md#phase-5-review).
-- [ ] User authorizes beginning Phase 6.
+- [x] User verifies Phase 5 using the [README review steps](../README.md#phase-5-review).
+- [x] User authorizes beginning Phase 6.
 
 ## Phase 6: Lifecycle and Account Cleanup
 
@@ -242,20 +242,26 @@ Phase 5 is ready for user review at the local review URL. Phase 6 remains blocke
 
 ### Step 6.1: Event lifecycle
 
-- [ ] P6.1a: Implement archive/unarchive, cancellation, and permanent deletion rules using centralized state guards.
-- [ ] P6.1b: Implement admin transfer as a single transaction to an existing participant.
-- [ ] P6.1c: Build confirmation pages/controls and read-only cancelled/archived views; preserve date grouping independently.
-- [ ] P6.1d: Test every mutation against archived/cancelled states, concurrent transfer, deletion eligibility after a full post-reveal reset, and retained reveal access when no reset occurs.
+- [x] P6.1a: Implement archive/unarchive, cancellation, and permanent deletion rules using centralized state guards.
+- [x] P6.1b: Implement admin transfer as a single transaction to an existing participant.
+- [x] P6.1c: Build confirmation pages/controls and read-only cancelled/archived views; preserve date grouping independently.
+- [x] P6.1d: Test every mutation against archived/cancelled states, concurrent transfer, deletion eligibility after a full post-reveal reset, and retained reveal access when no reset occurs.
 
 ### Step 6.2: Account deletion
 
-- [ ] P6.2a: Implement reauthenticated deletion and admin handover/cancellation requirements established in P0.1c.
-- [ ] P6.2b: Delete profile, wishlist, sessions, tokens, and queued personal payloads; anonymize retained identity references without changing assignments.
-- [ ] P6.2c: Build deletion confirmation and neutral deleted-user views.
-- [ ] P6.2d: Test deletion before/after draw, retained recipient references, private data removal, and old-session rejection.
-- [ ] P6.2e: Document backup expiry and the distinction between logical deletion and removal from retained backups.
+- [x] P6.2a: Implement reauthenticated deletion and admin handover/cancellation requirements established in P0.1c.
+- [x] P6.2b: Delete profile, wishlist, sessions, tokens, and queued personal payloads; anonymize retained identity references without changing assignments.
+- [x] P6.2c: Build deletion confirmation and neutral deleted-user views.
+- [x] P6.2d: Test deletion before/after draw, retained recipient references, private data removal, and old-session rejection.
+- [x] P6.2e: Document backup expiry and the distinction between logical deletion and removal from retained backups.
 
 **Acceptance:** Read-only boundaries, transfer, and deletion work without reassignment or unintended disclosure.
+
+### Phase 6 Verification Checkpoint
+
+Verified locally on 2026-10-26: 89 backend unit/API tests and 17 PostgreSQL integration tests pass, including migration upgrade/downgrade, simultaneous admin transfers, event-state mutation guards, deletion before/after drawing, assignment preservation, session/private-data removal, and idempotent deletion-ledger replay. All 37 frontend tests pass; frontend lint, typecheck, and production build pass. Python flake8 and GOOGLE-profile isort pass. The full 36-test desktop/mobile Playwright suite passed in English and Polish with four workers; the eight Phase 6 lifecycle/account journeys passed again after the final UI update. ESLint reports 183 Vue formatting warnings and no errors. Hosted GitHub Actions has not been run.
+
+Phase 6 is ready for user review using the [README review steps](../README.md#phase-6-review). The local API, frontend, email worker, and PostgreSQL service are running for review. Automated off-site retention of the deletion ledger and backup restoration rehearsal remain Phase 7 operational gates. Phase 7 is blocked until the user verifies Phase 6 and separately authorizes it.
 
 ## Phase 7: Operational Readiness and Release
 

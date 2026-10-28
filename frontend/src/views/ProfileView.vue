@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { LogOut, Save } from '@lucide/vue'
+import { LogOut, Save, Trash2 } from '@lucide/vue'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -15,6 +15,7 @@ const email = ref('')
 const emailPassword = ref('')
 const currentPassword = ref('')
 const password = ref('')
+const deletionPassword = ref('')
 const busy = ref(false)
 const notice = ref('')
 const error = ref('')
@@ -46,6 +47,24 @@ async function submit(operation: 'profile' | 'change-email' | 'change-password' 
     error.value = apiError.code
     fields.value = apiError.fields
     if (apiError.code === 'unauthenticated') await router.replace('/login?next=/profile')
+  } finally {
+    busy.value = false
+  }
+}
+
+async function deleteAccount() {
+  if (!window.confirm(t('confirmDeleteAccount'))) return
+  busy.value = true
+  error.value = ''
+  notice.value = ''
+  try {
+    await request('/auth/account', { current_password: deletionPassword.value }, true, 'DELETE')
+    clearSession()
+    await router.replace('/login')
+  } catch (failure) {
+    const apiError = failure instanceof ApiError ? failure : new ApiError('service_unavailable')
+    error.value = apiError.code
+    fields.value = apiError.fields
   } finally {
     busy.value = false
   }
@@ -185,4 +204,20 @@ async function submit(operation: 'profile' | 'change-email' | 'change-password' 
       aria-hidden="true"
     />{{ t('logout') }}
   </button>
+  <section class="profile-section danger-zone">
+    <h2>{{ t('deleteAccount') }}</h2>
+    <form class="account-form" @submit.prevent="deleteAccount">
+      <label><span>{{ t('deleteAccountPassword') }}</span><input
+        v-model="deletionPassword"
+        name="deletion-password"
+        type="password"
+        required
+        maxlength="128"
+        autocomplete="current-password"
+      ></label>
+      <button class="secondary-button danger-button" type="submit" :disabled="busy">
+        <Trash2 :size="18" aria-hidden="true" />{{ t('deleteAccount') }}
+      </button>
+    </form>
+  </section>
 </template>

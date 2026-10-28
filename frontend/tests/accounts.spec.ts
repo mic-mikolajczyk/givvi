@@ -110,3 +110,35 @@ for (const language of ['en', 'pl'] as const) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   })
 }
+
+for (const language of ['en', 'pl'] as const) {
+  test(`account deletion requires confirmation and removes credentials in ${language}`, async ({ page }) => {
+    const copy = language === 'en' ? {
+      signup: 'Create account', events: 'Events', profile: 'Profile', delete: 'Delete account',
+      password: 'Current password', login: 'Sign in', invalid: 'Incorrect email or password.',
+    } : {
+      signup: 'Utwórz konto', events: 'Wydarzenia', profile: 'Profil', delete: 'Usuń konto',
+      password: 'Obecne hasło', login: 'Zaloguj się', invalid: 'Nieprawidłowy email lub hasło.',
+    }
+    const email = `phase6-account-${randomUUID()}@example.com`
+    const password = 'correct horse battery staple'
+    await page.goto('/register')
+    await page.getByRole('combobox').selectOption(language)
+    await page.locator('input[name="name"]').fill('Alicja')
+    await page.locator('input[name="email"]').fill(email)
+    await page.locator('input[name="password"]').fill(password)
+    await page.getByRole('button', { name: copy.signup }).click()
+    await expect(page.getByRole('heading', { name: copy.events, exact: true })).toBeVisible()
+
+    await page.getByRole('link', { name: copy.profile, exact: true }).click()
+    await page.locator('input[name="deletion-password"]').fill(password)
+    page.once('dialog', (dialog) => dialog.accept())
+    await page.getByRole('button', { name: copy.delete, exact: true }).click()
+    await expect(page).toHaveURL(/\/login$/)
+
+    await page.locator('input[name="email"]').fill(email)
+    await page.locator('input[name="password"]').fill(password)
+    await page.getByRole('button', { name: copy.login }).click()
+    await expect(page.getByRole('alert')).toContainText(copy.invalid)
+  })
+}

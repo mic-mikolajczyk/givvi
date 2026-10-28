@@ -92,11 +92,19 @@ class AccountToken(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
 
 
+class AccountDeletionRecord(Base):
+    __tablename__ = "account_deletion_records"
+
+    user_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    deleted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class EmailMessage(Base):
     __tablename__ = "email_outbox"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    event_id: Mapped[str | None] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"), index=True)
     payload: Mapped[str | None] = mapped_column(Text)
     available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -125,7 +133,7 @@ class Event(Base):
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    admin_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
+    admin_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
     name: Mapped[str] = mapped_column(String(120))
     exchange_date: Mapped[date] = mapped_column(Date)
     exchange_time: Mapped[time | None] = mapped_column(Time)

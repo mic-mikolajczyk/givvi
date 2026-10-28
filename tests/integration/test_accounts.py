@@ -50,6 +50,20 @@ def test_migration_upgrade_downgrade_and_registration(migrated_app) -> None:
         assert {"invite_token_hash", "invite_token_encrypted"} <= {
             column["name"] for column in inspect(connection).get_columns("events")
         }
+        assert "account_deletion_records" in inspect(connection).get_table_names()
+        admin_column = next(column for column in inspect(connection).get_columns("events") if column["name"] == "admin_id")
+        assert admin_column["nullable"] is True
+        admin_foreign_key = next(
+            foreign_key for foreign_key in inspect(connection).get_foreign_keys("events")
+            if foreign_key["constrained_columns"] == ["admin_id"]
+        )
+        assert admin_foreign_key["options"]["ondelete"] == "SET NULL"
+        assert "event_id" in {column["name"] for column in inspect(connection).get_columns("email_outbox")}
+        outbox_event_foreign_key = next(
+            foreign_key for foreign_key in inspect(connection).get_foreign_keys("email_outbox")
+            if foreign_key["constrained_columns"] == ["event_id"]
+        )
+        assert outbox_event_foreign_key["options"]["ondelete"] == "CASCADE"
 
 
 @pytest.mark.integration

@@ -219,3 +219,45 @@ for (const language of ['en', 'pl'] as const) {
     await Promise.all(contexts.map((context) => context.close()))
   })
 }
+
+for (const language of ['en', 'pl'] as const) {
+  test(`admin manages event lifecycle in ${language}`, async ({ page }) => {
+    const copy = language === 'en' ? {
+      signup: 'Create account', events: 'Events', create: 'Create event', save: 'Save event',
+      archive: 'Archive event', archived: 'Archived', unarchive: 'Unarchive event', cancel: 'Cancel event',
+      cancelled: 'Cancelled', delete: 'Delete event',
+    } : {
+      signup: 'Utwórz konto', events: 'Wydarzenia', create: 'Utwórz wydarzenie', save: 'Zapisz wydarzenie',
+      archive: 'Zarchiwizuj wydarzenie', archived: 'Zarchiwizowane', unarchive: 'Przywróć wydarzenie',
+      cancel: 'Anuluj wydarzenie', cancelled: 'Anulowane', delete: 'Usuń wydarzenie',
+    }
+    const email = `phase6-event-${randomUUID()}@example.com`
+    await page.goto('/register')
+    await page.getByRole('combobox').selectOption(language)
+    await page.locator('input[name="name"]').fill('Organizer')
+    await page.locator('input[name="email"]').fill(email)
+    await page.locator('input[name="password"]').fill('correct horse battery staple')
+    await page.getByRole('button', { name: copy.signup }).click()
+    await expect(page.getByRole('heading', { name: copy.events, exact: true })).toBeVisible()
+
+    await page.getByRole('button', { name: copy.create }).click()
+    await page.locator('input[name="name"]').fill(`Lifecycle event ${language}`)
+    await page.locator('input[name="exchange_date"]').fill('2026-12-20')
+    await page.locator('input[name="time_zone"]').fill('Europe/Warsaw')
+    await page.getByRole('button', { name: copy.save }).click()
+    await expect(page.getByRole('heading', { name: `Lifecycle event ${language}` })).toBeVisible()
+
+    page.once('dialog', (dialog) => dialog.accept())
+    await page.getByRole('button', { name: copy.archive }).click()
+    await expect(page.getByText(copy.archived, { exact: true })).toBeVisible()
+    await page.getByRole('button', { name: copy.unarchive }).click()
+    page.once('dialog', (dialog) => dialog.accept())
+    await page.getByRole('button', { name: copy.cancel }).click()
+    await expect(page.getByText(copy.cancelled, { exact: true })).toBeVisible()
+    page.once('dialog', (dialog) => dialog.accept())
+    await page.getByRole('button', { name: copy.delete }).click()
+    await expect(page).toHaveURL(/\/events$/)
+    await expect(page.getByText(`Lifecycle event ${language}`)).toHaveCount(0)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  })
+}

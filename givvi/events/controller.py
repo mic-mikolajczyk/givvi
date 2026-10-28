@@ -96,6 +96,56 @@ def get_event(event_id: str) -> Response:
         return jsonify(event=event_response(database, event, user.id))
 
 
+@events.post("/<event_id>/archive")
+def archive_event(event_id: str) -> Response:
+    with Session(current_app.extensions["database"]) as database, database.begin():
+        require_csrf(database)
+        user = require_user(database)
+        event = get_admin_event(database, event_id, user.id, lock=True)
+        services.archive_event(event)
+        return jsonify(event=event_response(database, event, user.id))
+
+
+@events.delete("/<event_id>/archive")
+def unarchive_event(event_id: str) -> Response:
+    with Session(current_app.extensions["database"]) as database, database.begin():
+        require_csrf(database)
+        user = require_user(database)
+        event = get_admin_event(database, event_id, user.id, lock=True)
+        services.unarchive_event(event)
+        return jsonify(event=event_response(database, event, user.id))
+
+
+@events.post("/<event_id>/cancel")
+def cancel_event(event_id: str) -> Response:
+    with Session(current_app.extensions["database"]) as database, database.begin():
+        require_csrf(database)
+        user = require_user(database)
+        event = get_admin_event(database, event_id, user.id, lock=True)
+        services.cancel_event(database, event)
+        return jsonify(event=event_response(database, event, user.id))
+
+
+@events.delete("/<event_id>")
+def delete_event(event_id: str) -> Response:
+    with Session(current_app.extensions["database"]) as database, database.begin():
+        require_csrf(database)
+        user = require_user(database)
+        event = get_admin_event(database, event_id, user.id, lock=True)
+        services.delete_event(database, event)
+        return jsonify(code="event_deleted")
+
+
+@events.post("/<event_id>/transfer")
+def transfer_event_admin(event_id: str) -> Response:
+    with Session(current_app.extensions["database"]) as database, database.begin():
+        require_csrf(database)
+        user = require_user(database)
+        event = get_admin_event(database, event_id, user.id, lock=True)
+        services.transfer_admin(database, event, request_body().get("participant_id"))
+        return jsonify(event=event_response(database, event, user.id))
+
+
 @events.get("/<event_id>/participants/<participant_id>/wishlist")
 def get_participant_wishlist(event_id: str, participant_id: str) -> Response:
     with Session(current_app.extensions["database"]) as database, database.begin():

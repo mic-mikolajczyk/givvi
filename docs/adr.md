@@ -164,7 +164,7 @@ Log request ID, route template, status, duration, operation, and opaque identifi
 
 **Rationale/alternatives:** Cascading deletion of assignments invalidates the exchange. Retaining a profile with a deleted flag does not meet the intended personal-data removal.
 
-**Implementation:** After approved admin-departure handling, revoke sessions/tokens, remove wishlist/profile data, detach user references, and replace retained identity labels consistently. Remove pending personal email payloads. Preserve opaque participant/assignment references. Apply the approved policy to names that themselves contain personal data. Define backup expiration, retained audit data, and restore-time reapplication of deletion records; do not promise immediate physical deletion from all backups.
+**Implementation:** After approved admin-departure handling, revoke sessions/tokens, remove wishlist/profile data, detach user references, and replace retained identity labels consistently. Remove pending personal email payloads. Preserve opaque participant/assignment references. Apply the approved policy to names that themselves contain personal data. Keep only the opaque account ID and deletion timestamp in the deletion ledger; restore tooling reapplies those records before access is reopened. Keep the ledger separately from restorable snapshots, expire backups within 30 days, and do not promise immediate physical deletion from retained backups.
 
 **Verification:** Deletion fixtures before and after drawing, admin handover scenarios, stale-token rejection, history integrity, and checks for retained identifying fields. Product ambiguities must be settled through plan step 0.1 before implementation.
 

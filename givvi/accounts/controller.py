@@ -164,3 +164,20 @@ def password_change(database: Session, body: dict) -> Response:
 def email_change(database: Session, body: dict) -> tuple[Response, int]:
     services.change_email(database, require_user(database), body)
     return jsonify(code="check_email"), 202
+
+
+@accounts.delete("/account")
+def account_deletion() -> Response:
+    with Session(current_app.extensions["database"]) as database, database.begin():
+        require_csrf(database)
+        user = require_user(database)
+        throttle("account_deletion", user.email)
+        services.delete_account(database, user, request_body())
+        response = jsonify(code="account_deleted")
+        response.delete_cookie(
+            COOKIE_NAME,
+            secure=current_app.config["COOKIE_SECURE"],
+            httponly=True,
+            samesite="Lax",
+        )
+        return response

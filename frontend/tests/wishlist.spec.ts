@@ -70,7 +70,7 @@ for (const language of ['en', 'pl'] as const) {
 
 for (const language of ['en', 'pl'] as const) {
   test(`event member views another participant wishlist in ${language}`, async ({ page, browser }) => {
-    const origin = 'http://127.0.0.1:5174'
+    const origin = `http://127.0.0.1:${process.env.GIVVI_E2E_WEB_PORT || '5173'}`
     const copy = language === 'en' ? {
       signupLanguage: 'en', viewWishlist: 'View wishlist', overBudget: 'Over event budget', back: 'Back to event',
     } : {

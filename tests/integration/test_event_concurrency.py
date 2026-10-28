@@ -46,6 +46,50 @@ def create_invited_event(app, entry_names: tuple[str, ...]):
 
 
 @pytest.mark.integration
+def test_competing_admin_transfers_are_serialized(migrated_app) -> None:
+    app, unused_config = migrated_app
+    admin, admin_csrf, event_id, participant_ids, token = create_invited_event(app, ("Morgan", "Riley"))
+    for index, participant_id in enumerate(participant_ids):
+        member = app.test_client()
+        member_csrf = register(member, app, f"transfer-member-{uuid4()}@example.com")
+        claimed = member.post(f"/api/events/{event_id}/claim", json={
+            "participant_id": participant_id, "token": token,
+        }, headers={"X-CSRF-Token": member_csrf, "Origin": app.config["APP_ORIGIN"]})
+        assert claimed.status_code == 200
+
+    admin_user = admin.get("/api/auth/me").json["user"]
+    second_admin = app.test_client()
+    login_csrf = second_admin.get("/api/auth/csrf").json["csrf_token"]
+    login = second_admin.post("/api/auth/login", json={
+        "email": admin_user["email"], "password": "correct horse battery staple",
+    }, headers={"X-CSRF-Token": login_csrf, "Origin": app.config["APP_ORIGIN"]})
+    assert login.status_code == 200
+    second_admin_csrf = login.json["csrf_token"]
+    barrier = Barrier(2)
+
+    def transfer_once(client, csrf: str, participant_id: str) -> int:
+        barrier.wait(timeout=10)
+        return client.post(f"/api/events/{event_id}/transfer", json={"participant_id": participant_id}, headers={
+            "X-CSRF-Token": csrf, "Origin": app.config["APP_ORIGIN"],
+        }).status_code
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(transfer_once, admin, admin_csrf, participant_ids[0]),
+            executor.submit(transfer_once, second_admin, second_admin_csrf, participant_ids[1]),
+        ]
+        statuses = [future.result() for future in futures]
+
+    assert sorted(statuses) == [200, 404]
+    with Session(app.extensions["database"]) as database:
+        event = database.get(Event, event_id)
+        assert event.admin_id in {
+            database.get(EventParticipant, participant_ids[0]).user_id,
+            database.get(EventParticipant, participant_ids[1]).user_id,
+        }
+
+
+@pytest.mark.integration
 def test_competing_users_cannot_claim_the_same_roster_entry(migrated_app) -> None:
     app, unused_config = migrated_app
     unused_admin, unused_csrf, event_id, participant_ids, token = create_invited_event(app, ("Morgan",))
