@@ -1,5 +1,7 @@
+import csv
 from datetime import datetime
 from datetime import timezone
+from io import StringIO
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -160,3 +162,43 @@ def test_restore_reapplies_account_deletion_records(account_app) -> None:
         assert participant.name == "Deleted user"
         assert participant.user_id is None
         assert reapply_account_deletions(database) == 1
+
+
+def test_ledger_import_erases_restored_profile_and_is_idempotent(account_app, client, registered_user) -> None:
+    user_id = client.get("/api/auth/me").json["user"]["id"]
+    ledger = f"user_id,deleted_at\n{user_id},2026-10-26T00:00:00+00:00\n"
+    runner = account_app.test_cli_runner()
+
+    blocked = runner.invoke(args=["import-deletion-ledger"], input=ledger)
+    assert blocked.exit_code != 0
+    imported = runner.invoke(args=["import-deletion-ledger", "--confirm-isolated-restore"], input=ledger)
+    repeated = runner.invoke(args=["import-deletion-ledger", "--confirm-isolated-restore"], input=ledger)
+
+    assert imported.exit_code == 0, imported.output
+    assert repeated.exit_code == 0, repeated.output
+    assert client.get("/api/auth/me").status_code == 401
+    with Session(account_app.extensions["database"]) as database:
+        assert database.get(User, user_id) is None
+        assert database.get(AccountDeletionRecord, user_id) is not None
+    exported = runner.invoke(args=["export-deletion-ledger"])
+    rows = list(csv.DictReader(StringIO(exported.output)))
+    assert exported.exit_code == 0
+    assert len(rows) == 1
+    assert rows[0]["user_id"] == user_id
+    assert set(rows[0]) == {"user_id", "deleted_at"}
+    assert registered_user["email"] not in exported.output
+
+
+def test_invalid_ledger_rolls_back_all_imported_records(account_app, client, registered_user) -> None:
+    user_id = client.get("/api/auth/me").json["user"]["id"]
+    ledger = f"user_id,deleted_at\n{user_id},2026-10-26T00:00:00+00:00\ninvalid,not-a-timestamp\n"
+
+    result = account_app.test_cli_runner().invoke(
+        args=["import-deletion-ledger", "--confirm-isolated-restore"], input=ledger,
+    )
+
+    assert result.exit_code != 0
+    assert "Invalid deletion ledger" in result.output
+    with Session(account_app.extensions["database"]) as database:
+        assert database.get(User, user_id) is not None
+        assert database.get(AccountDeletionRecord, user_id) is None

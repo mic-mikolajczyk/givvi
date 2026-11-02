@@ -116,6 +116,8 @@ Each record states context, decision/pattern, rationale and alternatives, implem
 
 **Verification:** Transaction rollback queues nothing; worker crash/restart, provider timeouts, duplicate delivery, redaction, and payload expiry are tested. Templates support both languages and English fallback.
 
+**Phase 7 implementation defaults (2026-10-28):** At most five leased delivery attempts; expired leases are recoverable but an exhausted final lease is not sent again. Retry delays start at 30 seconds, double up to 600 seconds, and add 0-30 seconds of secure jitter. Payloads are purged after delivery, expiry, or terminal failure. Non-payload terminal rows are removed after seven days. Error-level exhausted/permanent-delivery logs and protected aggregate outbox metrics are monitoring inputs, not a substitute for configuring an external alert receiver. SMTP delivery is at least once: a crash after provider acceptance can duplicate an email. No exactly-once claim is made.
+
 ## ADR-010: Localization, Money, and Time
 
 **Context:** Polish is a primary target language, but language is not the same thing as an event's currency or time zone.
@@ -156,6 +158,8 @@ Log request ID, route template, status, duration, operation, and opaque identifi
 
 **Verification:** Count queries to detect N+1 behavior; use PostgreSQL query plans and representative load tests. Measure p95 latency, error rates, lock waits, and polling load before agreeing numeric release budgets. Do not advertise unmeasured capacity.
 
+**Phase 7 implementation defaults (2026-10-28):** Visible event/list/wishlist views refresh every 15 seconds, backing off to at most 120 seconds after failed reads. Hide/unmount/route changes and mutations abort obsolete refreshes; generation checks reject stale results. Editing pauses refresh to preserve input. Allowlisted authorized event projections support ETags after authorization; the browser retains at most 20 projections in session-local memory and invalidates them on mutations/session changes. Server responses remain `no-store`; invite links and recipients never receive validators. A GET of `/reveal` returns only an already revealed current-user recipient and cannot reveal a new assignment. Event-list rosters are batched into one page-scoped query, avoiding measured N+1 behavior. PostgreSQL connections use bounded pools (5 plus 5 overflow per process), three-second connection/pool/lock waits and ten-second statement timeouts; deployment sizing must account for API workers and mail workers together.
+
 ## ADR-013: Account Deletion and Retained History
 
 **Context:** Deleting an account must remove personal data without changing other participants' assignments.
@@ -191,6 +195,8 @@ Log request ID, route template, status, duration, operation, and opaque identifi
 **Implementation:** Use non-root containers, a production WSGI server, least-privilege database credentials, external secrets, pinned/scanned dependencies, and no debug mode. Run migrations as a controlled deployment step, not from every worker startup. Use expand/contract changes where rollback compatibility matters. Collect protected aggregate metrics for latency, failures, pool/lock pressure, outbox backlog, and delivery failures without sensitive labels. Separate liveness from dependency readiness; provider outage should not kill healthy API processes. Configure automated encrypted backups and test restoration in isolation.
 
 **Verification:** Rehearse deployment/rollback, restore a backup, simulate database/email outages, and verify alerts and redaction. Record actual recovery objectives and capacity after rehearsal rather than asserting unsupported guarantees.
+
+**Phase 7 deployment contract (2026-10-28):** Non-root Gunicorn API/mail images and a non-root Caddy frontend provide same-origin HTTPS. Production mode rejects debug/testing, insecure cookies/origins, non-PostgreSQL databases, database TLS without `verify-full`, plaintext SMTP, the example encryption key, and missing/short metrics credentials. Secrets are supplied as mounted files, not image build arguments. Metrics require a separate bearer credential and expose aggregates only. Application request logs allowlist route templates, duration, status, and generated request IDs; neither proxy nor WSGI raw-URL access logs are enabled. Database migration/restore tasks use a separate owner credential; runtime roles have DML only. Backup and deletion-ledger exports must be encrypted and retained separately off-site, with backup expiry within 30 days. Local rehearsal does not certify a managed-provider backup schedule, external alert receiver, or a closed-group pilot; those remain explicit release gates.
 
 ## ADR-016: Deliberate Scope Control
 

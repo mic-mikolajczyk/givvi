@@ -54,6 +54,13 @@ export interface EventRecord {
 export const currentUser = ref<User | null>(null)
 let csrfToken = ''
 let csrfRequest: Promise<void> | undefined
+const readCache = new Map<string, { etag: string; payload: unknown }>()
+let cacheVersion = 0
+
+function invalidateReads() {
+  cacheVersion += 1
+  readCache.clear()
+}
 
 export class ApiError extends Error {
   constructor(public code: string, public fields: Record<string, string> = {}, public requestId = '') {
@@ -62,6 +69,7 @@ export class ApiError extends Error {
 }
 
 export function clearSession() {
+  invalidateReads()
   currentUser.value = null
   csrfToken = ''
   csrfRequest = undefined
@@ -81,34 +89,53 @@ export async function request<T = Record<string, unknown>>(
   retryCsrf = true,
   method: 'POST' | 'PATCH' | 'DELETE' = 'POST',
   csrfRequired = true,
+  signal?: AbortSignal,
 ): Promise<T> {
+  const conditional = !body && /^\/events(?:\?|$|\/[^/]+(?:\/drawing|\/participants\/[^/]+\/wishlist)?$)/.test(path)
+  if (body) {
+    invalidateReads()
+    window.dispatchEvent(new Event('givvi:mutation-start'))
+  }
+  const version = cacheVersion
+  const cached = conditional ? readCache.get(path) : undefined
   try {
     if (body && csrfRequired) await ensureCsrf()
     const response = await fetch(`/api${path}`, {
       method: body ? method : 'GET',
       credentials: 'same-origin',
       cache: 'no-store',
-      signal: AbortSignal.timeout(10000),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10000)]) : AbortSignal.timeout(10000),
       headers: body ? {
         'Content-Type': 'application/json',
         ...(csrfRequired ? { 'X-CSRF-Token': csrfToken } : {}),
-      } : {},
+      } : (cached ? { 'If-None-Match': cached.etag } : {}),
       body: body ? JSON.stringify(body) : undefined,
     })
+    if (response.status === 304 && cached && version === cacheVersion) return structuredClone(cached.payload) as T
     const payload = await response.json()
     if (!response.ok) {
       if (payload.code === 'csrf_invalid' && body && retryCsrf && csrfRequired) {
         csrfToken = ''
-        return await request<T>(path, body, false, method, csrfRequired)
+        return await request<T>(path, body, false, method, csrfRequired, signal)
       }
       if (payload.code === 'unauthenticated') clearSession()
       throw new ApiError(payload.code || 'internal_error', payload.field_errors || {}, payload.request_id || '')
     }
     if (payload.csrf_token) csrfToken = payload.csrf_token
+    const etag = response.headers.get('ETag')
+    if (conditional && etag && version === cacheVersion && !signal?.aborted) {
+      if (readCache.size >= 20) readCache.delete(readCache.keys().next().value!)
+      readCache.set(path, { etag, payload: structuredClone(payload) })
+    }
     return payload as T
   } catch (error) {
     if (error instanceof ApiError) throw error
     throw new ApiError('service_unavailable')
+  } finally {
+    if (body) {
+      invalidateReads()
+      window.dispatchEvent(new Event('givvi:mutation'))
+    }
   }
 }
 

@@ -2,6 +2,58 @@ import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 
 for (const language of ['en', 'pl'] as const) {
+  test(`refreshes external claims without overwriting edited fields in ${language}`, async ({ browser, page, baseURL }) => {
+    const origin = baseURL!
+    const password = 'correct horse battery staple'
+    const csrf = (await (await page.request.get('/api/auth/csrf')).json()).csrf_token
+    const registered = await page.request.post('/api/auth/register', {
+      data: { name: 'Polling organizer', email: `poll-admin-${randomUUID()}@example.com`, password, language },
+      headers: { Origin: origin, 'X-CSRF-Token': csrf },
+    })
+    expect(registered.status()).toBe(201)
+    const headers = { Origin: origin, 'X-CSRF-Token': (await registered.json()).csrf_token }
+    const created = await page.request.post('/api/events', {
+      data: { name: 'Polling exchange', exchange_date: '2026-12-20', time_zone: 'UTC' }, headers,
+    })
+    const eventId = (await created.json()).event.id
+    const added = await page.request.post(`/api/events/${eventId}/participants`, { data: { name: 'Morgan' }, headers })
+    const participantId = (await added.json()).participant.id
+    const invitation = await page.request.post(`/api/events/${eventId}/invite-link`, { data: {}, headers })
+    const token = new URLSearchParams(new URL((await invitation.json()).link).hash.slice(1)).get('token')
+    await page.clock.install()
+    await page.goto(`/events/${eventId}`)
+    await expect(page.getByRole('heading', { name: 'Polling exchange' })).toBeVisible()
+    await expect(page.locator('.claim-state')).toHaveText(language === 'en' ? 'Not claimed' : 'Niepotwierdzony')
+
+    const member = await browser.newContext({ baseURL: origin })
+    try {
+      const memberCsrf = (await (await member.request.get('/api/auth/csrf')).json()).csrf_token
+      const joined = await member.request.post('/api/auth/register', {
+        data: { name: 'Member', email: `poll-member-${randomUUID()}@example.com`, password },
+        headers: { Origin: origin, 'X-CSRF-Token': memberCsrf },
+      })
+      const claimed = await member.request.post(`/api/events/${eventId}/claim`, {
+        data: { participant_id: participantId, token },
+        headers: { Origin: origin, 'X-CSRF-Token': (await joined.json()).csrf_token },
+      })
+      expect(claimed.status()).toBe(200)
+      await page.clock.fastForward(15000)
+      await expect(page.locator('.claim-state')).toHaveText(language === 'en' ? 'Claimed' : 'Potwierdzono udział')
+      await page.getByRole('button', { name: language === 'en' ? 'Edit event' : 'Edytuj wydarzenie', exact: true }).click()
+      await page.locator('input[name="name"]').fill('Unsaved draft')
+      const changed = await page.request.patch(`/api/events/${eventId}`, { data: { name: 'External update' }, headers })
+      expect(changed.status()).toBe(200)
+      await page.clock.fastForward(30000)
+      await expect(page.locator('input[name="name"]')).toHaveValue('Unsaved draft')
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+      await page.screenshot({ path: test.info().outputPath(`polling-${language}.png`), fullPage: true })
+    } finally {
+      await member.close()
+    }
+  })
+}
+
+for (const language of ['en', 'pl'] as const) {
   test(`organizer creates an event and prepares its roster in ${language}`, async ({ page }) => {
     const copy = language === 'en' ? {
       signup: 'Create account', events: 'Events', create: 'Create event', name: 'Event name',

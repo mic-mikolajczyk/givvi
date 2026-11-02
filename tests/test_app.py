@@ -63,3 +63,79 @@ def test_unavailable_database_does_not_leak_connection_details(caplog: pytest.Lo
         assert sensitive_value not in response.get_data(as_text=True)
         assert sensitive_value not in caplog.text
     application.extensions["database"].dispose()
+
+
+@pytest.mark.parametrize("override", [
+    {"DEBUG": True},
+    {"TESTING": True},
+    {"COOKIE_SECURE": False},
+    {"APP_ORIGIN": "http://givvi.example"},
+    {"APP_ORIGIN": "https://givvi.example/path"},
+    {"DATABASE_URL": "sqlite://"},
+    {"DATABASE_URL": "postgresql+psycopg://givvi@db/givvi?sslmode=require"},
+    {"SMTP_TLS": False},
+    {"METRICS_TOKEN": "short"},
+    {"OUTBOX_KEY": "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE="},
+])
+def test_production_rejects_unsafe_configuration(override: dict) -> None:
+    config = {
+        "ENVIRONMENT": "production", "DATABASE_URL": "postgresql+psycopg://givvi@db/givvi?sslmode=verify-full",
+        "OUTBOX_KEY": Fernet.generate_key().decode(), "METRICS_TOKEN": "operator-only-test-token-at-least-32-chars",
+        "APP_ORIGIN": "https://givvi.example", "SMTP_TLS": True,
+    }
+    config.update(override)
+
+    with pytest.raises(RuntimeError, match="Production"):
+        create_app(config)
+
+
+def test_metrics_are_protected_and_contain_only_aggregates(account_app: Flask) -> None:
+    client = account_app.test_client()
+    assert client.get("/api/health/metrics").status_code == 404
+    account_app.config["METRICS_TOKEN"] = "private-monitor-token"
+    assert client.get("/api/health/metrics").status_code == 404
+    assert client.get("/api/health/metrics", headers={"Authorization": "Bearer incorrect"}).status_code == 404
+
+    response = client.get("/api/health/metrics", headers={"Authorization": "Bearer private-monitor-token"})
+
+    assert response.status_code == 200
+    assert "givvi_outbox_pending 0" in response.text
+    assert "givvi_outbox_failed 0" in response.text
+    assert "private-monitor-token" not in response.text
+    assert response.headers["Cache-Control"] == "no-store"
+
+
+def test_security_headers_and_request_logs_do_not_include_raw_urls(app: Flask, caplog) -> None:
+    with caplog.at_level("INFO", logger=app.logger.name):
+        response = app.test_client().get("/api/health/live?token=private-url-secret")
+
+    assert response.headers["Content-Security-Policy"] == (
+        "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+    )
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert "Request completed" in caplog.text
+    assert "private-url-secret" not in caplog.text
+
+
+def test_secret_files_are_loaded_without_logging_contents(tmp_path, monkeypatch, caplog) -> None:
+    secret_file = tmp_path / "outbox-key"
+    key = Fernet.generate_key().decode()
+    secret_file.write_text(f"{key}\n")
+    monkeypatch.setenv("GIVVI_OUTBOX_KEY_FILE", str(secret_file))
+
+    application = create_app({"TESTING": True, "DATABASE_URL": "sqlite://"})
+
+    assert application.config["OUTBOX_KEY"] == key
+    assert key not in caplog.text
+    application.extensions["database"].dispose()
+
+
+def test_production_rejects_flask_debug_environment(monkeypatch) -> None:
+    monkeypatch.setenv("FLASK_DEBUG", "1")
+
+    with pytest.raises(RuntimeError, match="Production"):
+        create_app({
+            "ENVIRONMENT": "production", "DATABASE_URL": "postgresql+psycopg://givvi@db/givvi?sslmode=verify-full",
+            "OUTBOX_KEY": Fernet.generate_key().decode(), "METRICS_TOKEN": "operator-only-test-token-at-least-32-chars",
+            "APP_ORIGIN": "https://givvi.example", "SMTP_TLS": True,
+        })

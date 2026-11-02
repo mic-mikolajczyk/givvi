@@ -265,31 +265,37 @@ Phase 6 is ready for user review using the [README review steps](../README.md#ph
 
 ## Phase 7: Operational Readiness and Release
 
-**Outcome:** A deployable, observable, recoverable v1. Operational safeguards from earlier phases remain mandatory.
+**Outcome:** A deployable, observable, recoverable v1. Operational safeguards from earlier phases remain mandatory. Phase 7 implementation is partially locally verified; production deployment and release remain blocked by the open gates below.
 
 ### Step 7.1: Reliable delivery and refresh
 
-- [ ] P7.1a: Complete outbox retry/backoff, failed-delivery alerts, bounded retention, and worker recovery tests.
-- [ ] P7.1b: Add visibility-aware polling, conditional requests, backoff, stale-response handling, and cache invalidation after mutations.
-- [ ] P7.1c: Measure query counts, roster/wishlist payloads, and contention; add evidence-based indexes and fix N+1 queries.
-- [ ] P7.1d: Run load tests with representative small-group data and concurrent claims/reveals. Record baseline latency, error rate, and capacity before setting release thresholds.
+- [ ] P7.1a: Complete outbox retry/backoff, failed-delivery alert routing, bounded retention, and worker recovery tests. Retry, retention, terminal-failure logging, and recovery tests are implemented; an external alert receiver is not configured.
+- [x] P7.1b: Add visibility-aware polling, conditional requests, backoff, stale-response handling, and cache invalidation after mutations.
+- [x] P7.1c: Measure query counts, roster/wishlist payloads, and contention; add evidence-based indexes and fix N+1 queries.
+- [x] P7.1d: Run load tests with representative small-group data and concurrent claims/reveals. Record baseline latency, error rate, and capacity before setting release thresholds. The recorded small synthetic workload is local baseline evidence, not a production capacity or SLO claim.
 
 ### Step 7.2: Deployment and security gates
 
-- [ ] P7.2a: Build production Docker images, same-origin HTTPS routing, production WSGI configuration, non-root processes, and managed PostgreSQL configuration.
-- [ ] P7.2b: Document secrets, migrations, release/rollback, worker startup, readiness, backup schedules, and restore procedure.
-- [ ] P7.2c: Add dependency/image scanning and verify CSP, CSRF, cookie settings, rate limits, least-privilege credentials, and log redaction.
-- [ ] P7.2d: Verify production prohibits debug mode and protects metrics; exercise email outage, database outage, and worker restart recovery.
-- [ ] P7.2e: Restore a backup into an isolated environment and rehearse an application rollback compatible with the deployed schema.
+- [ ] P7.2a: Build production Docker images, verify same-origin HTTPS end to end, production WSGI configuration, non-root processes, and managed PostgreSQL configuration. Images build, but the HTTPS smoke is unresolved and managed PostgreSQL is not configured.
+- [x] P7.2b: Document secrets, migrations, release/rollback, worker startup, readiness, backup schedules, and restore procedure in [the operations guide](operations.md). Provider backup scheduling remains an external gate.
+- [ ] P7.2c: Add dependency/image scanning and verify CSP, CSRF, cookie settings, rate limits, least-privilege credentials, and log redaction. Local code-level checks and scans are recorded; production database-role verification remains outstanding.
+- [ ] P7.2d: Verify production prohibits debug mode and protects metrics; exercise email outage, database outage, and worker restart recovery. Automated local checks exist, but provider-backed outage and alert-delivery verification remains outstanding.
+- [x] P7.2e: Restore a backup into an isolated environment and rehearse an application rollback compatible with the deployed schema. Local PostgreSQL snapshot restore, deletion-ledger replay, and previous-revision compatibility passed; managed restore is still a release gate.
 
 ### Step 7.3: Release review
 
-- [ ] P7.3a: Run full Playwright scenarios in English and Polish on mobile/desktop, including invite-to-reveal and cancellation.
+- [x] P7.3a: Run full Playwright scenarios in English and Polish on mobile/desktop, including invite-to-reveal and cancellation. The local 40-journey suite passed; hosted CI has not run.
 - [ ] P7.3b: Review accessibility, missing translations, account privacy, and all spec acceptance criteria.
-- [ ] P7.3c: Publish operating instructions and known limitations; confirm deferred features remain absent.
+- [x] P7.3c: Publish operating instructions and known limitations; confirm deferred features remain absent. See [the operations guide](operations.md) and [backlog after v1](#backlog-after-v1).
 - [ ] P7.3d: Pilot with a small closed group, triage defects, and release only after correctness/security gates pass.
 
 **Acceptance:** CI passes, sensitive-data checks pass, backup restoration is demonstrated, and all v1 acceptance criteria have fresh evidence.
+
+### Phase 7 Verification Checkpoint
+
+Local verification on 2026-10-29 passed: 114 backend unit/API tests, 22 PostgreSQL integration tests, Python flake8 and isort, 42 frontend tests, frontend lint error gate, TypeScript typecheck, production build, and documentation whitespace checks. The 40 bilingual desktop/mobile Playwright journeys, dependency audits, production image scans, query/load checks, and isolated snapshot restore with deletion-ledger replay and previous-revision compatibility were recorded on 2026-10-28 in [Session 7](../SESSION_7.md); they were not rerun today. Hosted GitHub Actions has not run.
+
+The production HTTPS smoke is still unverified: the first local attempt received an ACME 400 for the synthetic `.test` hostname; a subsequent `localhost` attempt ended in HTTP 404 after TLS connection resets, and the source of that response was not established. Do not treat image builds or Caddy configuration validation as an end-to-end HTTPS pass. Managed database TLS and least-privilege roles, production SMTP, alert delivery, off-site backup/ledger retention, managed restore, manual accessibility/spec review, and the closed-group pilot remain open. No deployment or release has occurred.
 
 ## Requirement Coverage
 

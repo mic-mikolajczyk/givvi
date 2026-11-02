@@ -31,8 +31,13 @@ def request_body() -> dict:
     return body
 
 
-def event_response(database: Session, event: Event, user_id: str) -> dict:
-    view = services.event_view(event, user_id, services.roster(database, event.id))
+def event_response(
+    database: Session,
+    event: Event,
+    user_id: str,
+    participants: list[EventParticipant] | None = None
+) -> dict:
+    view = services.event_view(event, user_id, services.roster(database, event.id) if participants is None else participants)
     view["period"] = event_period(event)
     return view
 
@@ -69,9 +74,15 @@ def list_events() -> Response:
         query = select(Event).where(visibility).order_by(Event.exchange_date, Event.id)
         found = list(database.scalars(query.offset((page - 1) * page_size).limit(page_size)))
         total_count = database.scalar(select(func.count()).select_from(Event).where(visibility)) or 0
+        rosters: dict[str, list[EventParticipant]] = {event.id: [] for event in found}
+        if rosters:
+            for participant in database.scalars(select(EventParticipant).where(
+                EventParticipant.event_id.in_(rosters),
+            ).order_by(EventParticipant.name)):
+                rosters[participant.event_id].append(participant)
         result = []
         for event in found:
-            result.append(event_response(database, event, user.id))
+            result.append(event_response(database, event, user.id, rosters[event.id]))
         return jsonify(events=result, page=page, page_size=page_size, total=total_count)
 
 
@@ -339,6 +350,16 @@ def reveal_event_assignment(event_id: str) -> Response:
         event = services.event_for_user(database, event_id, user.id, lock=True)
         recipient = services.reveal_assignment(database, event, user.id)
         return jsonify(recipient=recipient)
+
+
+@events.get("/<event_id>/reveal")
+def get_revealed_assignment(event_id: str) -> Response:
+    with Session(current_app.extensions["database"]) as database, database.begin():
+        user = require_user(database)
+        event = services.event_for_user(database, event_id, user.id, lock=True)
+        if not services.drawing_status(database, event, user.id)["has_revealed"]:
+            raise ApiError("not_found", 404)
+        return jsonify(recipient=services.reveal_assignment(database, event, user.id))
 
 
 @events.delete("/<event_id>/drawing")

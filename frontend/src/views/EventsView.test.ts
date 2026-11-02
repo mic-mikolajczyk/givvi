@@ -344,7 +344,7 @@ describe('event management views', () => {
     await wrapper.get('button[aria-label="Next page"]').trigger('click')
     await flushPromises()
 
-    expect(request).toHaveBeenCalledWith('/events?page=2&page_size=50')
+    expect(request).toHaveBeenCalledWith('/events?page=2&page_size=50', undefined, true, 'POST', true, expect.any(AbortSignal))
     expect(wrapper.text()).toContain('Second exchange')
     expect(wrapper.get('[aria-label="Event pages"]').text()).toContain('2 / 2')
     wrapper.unmount()
@@ -523,7 +523,7 @@ describe('event management views', () => {
     const archived = { ...event, archived: true }
     const cancelled = { ...event, cancelled: true }
     request.mockImplementation((path: string, _body?: object, _retry?: boolean, method?: string) => {
-      if (path === '/events/event-1' && !method) return Promise.resolve({ event })
+      if (path === '/events/event-1' && !_body) return Promise.resolve({ event })
       if (path === '/events/event-1/invite-link') return Promise.reject(new ApiError('not_found'))
       if (path === '/events/event-1/archive' && method === 'POST') return Promise.resolve({ event: archived })
       if (path === '/events/event-1/archive' && method === 'DELETE') return Promise.resolve({ event })

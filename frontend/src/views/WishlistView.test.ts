@@ -106,7 +106,9 @@ describe('wishlist views', () => {
     })
     const wrapper = await mountWishlist('/events/event-1/participants/participant-1/wishlist')
 
-    expect(request).toHaveBeenCalledWith('/events/event-1/participants/participant-1/wishlist')
+    expect(request).toHaveBeenCalledWith(
+      '/events/event-1/participants/participant-1/wishlist', undefined, true, 'POST', true, expect.any(AbortSignal),
+    )
     expect(wrapper.text()).toContain('Morgan')
     expect(wrapper.text()).toContain('Winter exchange')
     expect(wrapper.text()).toContain('<img src=x onerror=alert(1)>')

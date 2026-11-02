@@ -10,11 +10,12 @@ Project verifies and indirectale measure how does AI affect software development
 
 ## Development Status
 
-Phases 0-5 are verified. Phase 6 implements event lifecycle controls, admin transfer, and account deletion, and is ready for review. Registration signs users in immediately without sending a verification email; password recovery and email-change confirmation remain supported. Each phase is reviewed by the user before the next begins.
+Phases 0-6 are verified. Phase 7 operational-readiness work is implemented and locally exercised in part, but the production HTTPS smoke and external deployment/release gates remain open. No production deployment or release has occurred. Registration signs users in immediately without sending a verification email; password recovery and email-change confirmation remain supported.
 
 - [Product specification](docs/spec.md)
 - [Delivery plan](docs/plan.md)
 - [Architecture decisions](docs/adr.md)
+- [Operations and deployment guide](docs/operations.md)
 
 ## Local Setup
 
@@ -157,6 +158,10 @@ Screenshots and failure traces are written under the ignored frontend test-resul
 Account deletion removes live profile, wishlist, credential, token, and queued account-message data. Retained event assignments are preserved, and claimed roster entries use the neutral “Deleted user” label. The `account_deletion_records` table retains only the opaque user ID and deletion timestamp so a restored snapshot can be sanitized again.
 
 Backups containing deleted profile data must expire within 30 days. Before restoring a snapshot, load the latest separately retained copy of `account_deletion_records` into the restored database, then run `.venv/bin/flask --env-file .env --app givvi reapply-account-deletions` before reopening access. The replay is idempotent and cancels/detaches any restored event still owned by a deleted account. Keep ledger exports access-controlled and separate from restorable snapshots; automated off-site ledger capture and backup restoration remain Phase 7 deployment gates. Logical deletion from the active database does not erase older retained backups immediately.
+
+## Phase 7 Readiness
+
+The Phase 7 implementation has local test, container-build, dependency/image-scan, query/load, and isolated recovery evidence recorded in [the delivery plan](docs/plan.md) and [Session 7](SESSION_7.md). This is not a production-readiness or release approval. In particular, the API/web HTTPS smoke did not pass, and managed database TLS/roles, production SMTP, alert delivery, off-site backups and deletion-ledger retention, managed restore, manual accessibility review, and a closed-group pilot still require verification. Use the [operations guide](docs/operations.md) for deployment prerequisites and recovery procedures; do not deploy until the open gates are closed.
 
 ## Upgrading Existing Development Data
 

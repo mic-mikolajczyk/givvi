@@ -8,6 +8,7 @@ import { useRoute } from 'vue-router'
 import { useRouter } from 'vue-router'
 
 import { ApiError, request, type DrawingStatus, type EventParticipant, type EventRecord } from '../api'
+import { usePolling } from '../polling'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -65,34 +66,51 @@ function applyEvent(value: EventRecord) {
   })
 }
 
-async function loadEvent() {
-  loading.value = true
-  error.value = ''
+async function loadEvent(signal: AbortSignal, isCurrent: () => boolean) {
+  if (event.value?.id !== eventId.value) {
+    event.value = null
+    ownRecipient.value = null
+    inviteLink.value = ''
+    loading.value = true
+  }
+  const identifier = eventId.value
+  const read = <T,>(path: string) => request<T>(path, undefined, true, 'POST', true, signal)
   try {
-    const payload = await request<{ event: EventRecord }>(`/events/${eventId.value}`)
+    const payload = await read<{ event: EventRecord }>(`/events/${identifier}`)
+    if (!isCurrent()) return
+    let drawing: DrawingStatus | null = null
+    let recipient: EventParticipant | null = null
+    if (payload.event.drawing_enabled) {
+      drawing = (await read<{ drawing: DrawingStatus }>(`/events/${identifier}/drawing`)).drawing
+      if (!isCurrent()) return
+      if (drawing.has_revealed) {
+        const revealed = await read<{ recipient: EventParticipant }>(`/events/${identifier}/reveal`)
+        recipient = revealed.recipient
+      }
+    }
+    if (!isCurrent()) return
     applyEvent(payload.event)
-    await loadInviteLink()
-    if (payload.event.drawing_enabled) await loadDrawingStatus()
+    if (drawing) drawingStatus.value = drawing
+    ownRecipient.value = recipient
+    error.value = ''
+    await loadInviteLink(signal, isCurrent)
   } catch (failure) {
+    if (!isCurrent()) return
     error.value = failure instanceof ApiError ? failure.code : 'service_unavailable'
+    if (['not_found', 'unauthenticated'].includes(error.value)) {
+      event.value = null
+      ownRecipient.value = null
+      inviteLink.value = ''
+    }
+    throw failure
   } finally {
-    loading.value = false
+    if (isCurrent()) loading.value = false
   }
 }
 
 async function revealOwnAssignment() {
   const payload = await request<{ recipient: EventParticipant }>(`/events/${eventId.value}/reveal`, {})
   ownRecipient.value = payload.recipient
-}
-
-async function loadDrawingStatus() {
-  try {
-    const payload = await request<{ drawing: DrawingStatus }>(`/events/${eventId.value}/drawing`)
-    drawingStatus.value = payload.drawing
-    if (payload.drawing.has_revealed) await revealOwnAssignment()
-  } catch (failure) {
-    error.value = failure instanceof ApiError ? failure.code : 'service_unavailable'
-  }
 }
 
 async function enableDrawing() {
@@ -192,13 +210,17 @@ async function transferAdmin() {
   }
 }
 
-async function loadInviteLink() {
+async function loadInviteLink(signal?: AbortSignal, isCurrent: () => boolean = () => true) {
+  if (!isCurrent()) return
   inviteLink.value = ''
   if (readOnly.value) return
   try {
-    const payload = await request<{ link: string }>(`/events/${eventId.value}/invite-link`)
-    inviteLink.value = payload.link
+    const payload = await request<{ link: string }>(
+      `/events/${eventId.value}/invite-link`, undefined, true, 'POST', true, signal,
+    )
+    if (isCurrent()) inviteLink.value = payload.link
   } catch (failure) {
+    if (!isCurrent()) return
     if (failure instanceof ApiError && ['invite_link_missing', 'not_found'].includes(failure.code)) return
     error.value = failure instanceof ApiError ? failure.code : 'service_unavailable'
   }
@@ -344,7 +366,20 @@ async function releaseClaim(participant: EventParticipant) {
   }
 }
 
-watch(eventId, loadEvent, { immediate: true })
+watch(eventId, () => {
+  editingDetails.value = false
+  editingParticipant.value = ''
+  event.value = null
+  drawingStatus.value = null
+  ownRecipient.value = null
+  inviteLink.value = ''
+  notice.value = ''
+  error.value = ''
+  loading.value = true
+})
+usePolling(() => eventId.value, loadEvent, {
+  paused: () => editingDetails.value || Boolean(editingParticipant.value) || saving.value || drawingBusy.value || lifecycleBusy.value,
+})
 </script>
 
 <template>

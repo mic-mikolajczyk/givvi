@@ -2,6 +2,7 @@ from collections.abc import Callable
 from datetime import timedelta
 from email.message import EmailMessage as SmtpMessage
 import json
+import secrets
 import smtplib
 import ssl
 from urllib.parse import parse_qs
@@ -32,6 +33,8 @@ MAX_DELIVERY_ATTEMPTS = 5
 LEASE_SECONDS = 60
 SMTP_TIMEOUT_SECONDS = 10
 RETRY_BASE_SECONDS = 30
+RETRY_MAX_SECONDS = 600
+OUTBOX_RETENTION_DAYS = 7
 
 
 def account_link_is_active(engine: Engine, payload: dict) -> bool:
@@ -73,10 +76,28 @@ def deliver_pending(app: Flask, sender: Callable[[dict], None] | None = None, li
     with app.app_context():
         engine = app.extensions["database"]
         with Session(engine) as database, database.begin():
+            cutoff = now() - timedelta(days=OUTBOX_RETENTION_DAYS)
+            database.execute(delete(EmailMessage).where(
+                EmailMessage.payload.is_(None),
+                or_(EmailMessage.delivered_at <= cutoff, EmailMessage.failed_at <= cutoff),
+            ))
+            exhausted = database.scalars(select(EmailMessage).where(
+                EmailMessage.payload.is_not(None),
+                EmailMessage.failed_at.is_(None),
+                EmailMessage.delivered_at.is_(None),
+                EmailMessage.attempts >= MAX_DELIVERY_ATTEMPTS,
+                or_(EmailMessage.lease_until.is_(None), EmailMessage.lease_until <= now()),
+            ).with_for_update(skip_locked=True)).all()
+            for record in exhausted:
+                record.payload = None
+                record.failed_at = now()
+                record.lease_id = None
+                record.lease_until = None
+                app.logger.error("Email delivery exhausted", extra={"message_id": record.id})
             expired = update(EmailMessage).where(EmailMessage.expires_at <= now(), EmailMessage.payload.is_not(None))
             database.execute(expired.values(
                 payload=None, failed_at=now(), lease_id=None, lease_until=None,
-            ))
+            ).execution_options(synchronize_session="fetch"))
             for model in (AccountToken, LoginSession, RateBucket):
                 database.execute(delete(model).where(model.expires_at <= now()))
         for unused_index in range(limit):
@@ -85,6 +106,7 @@ def deliver_pending(app: Flask, sender: Callable[[dict], None] | None = None, li
                     EmailMessage.payload.is_not(None),
                     EmailMessage.delivered_at.is_(None),
                     EmailMessage.failed_at.is_(None),
+                    EmailMessage.attempts < MAX_DELIVERY_ATTEMPTS,
                     EmailMessage.available_at <= now(),
                     EmailMessage.expires_at > now(),
                     or_(
@@ -112,8 +134,9 @@ def deliver_pending(app: Flask, sender: Callable[[dict], None] | None = None, li
                 failed = True
                 permanent = isinstance(error, (InvalidToken, ValueError, KeyError)) or attempts >= MAX_DELIVERY_ATTEMPTS
             with Session(engine) as database, database.begin():
-                record = database.scalar(select(EmailMessage).where(EmailMessage.id == identifier,
-                                         EmailMessage.lease_id == lease).with_for_update())
+                record = database.scalar(select(EmailMessage).where(
+                    EmailMessage.id == identifier, EmailMessage.lease_id == lease,
+                ).with_for_update())
                 if not record:
                     continue
                 record.lease_id = None
@@ -125,6 +148,11 @@ def deliver_pending(app: Flask, sender: Callable[[dict], None] | None = None, li
                 elif permanent:
                     record.failed_at = now()
                     record.payload = None
+                    if attempts >= MAX_DELIVERY_ATTEMPTS:
+                        app.logger.error("Email delivery exhausted", extra={"message_id": identifier})
+                    else:
+                        app.logger.error("Email delivery permanently failed", extra={"message_id": identifier})
                 else:
-                    record.available_at = now() + timedelta(seconds=RETRY_BASE_SECONDS * 2 ** (attempts - 1))
+                    delay = min(RETRY_MAX_SECONDS, RETRY_BASE_SECONDS * 2 ** (attempts - 1))
+                    record.available_at = now() + timedelta(seconds=delay + secrets.randbelow(RETRY_BASE_SECONDS + 1))
     return delivered

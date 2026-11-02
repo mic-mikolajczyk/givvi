@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { CalendarDays, ChevronLeft, ChevronRight, Plus, X } from '@lucide/vue'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import { ApiError, request, type EventRecord } from '../api'
+import { usePolling } from '../polling'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -24,26 +25,30 @@ const form = reactive({
 
 const periods = computed(() => ['upcoming', 'ongoing', 'past'] as const)
 
-async function loadEvents(targetPage = page.value) {
-  loading.value = true
+async function loadEvents(signal: AbortSignal, isCurrent: () => boolean) {
   try {
     const payload = await request<{ events: EventRecord[]; page: number; total: number }>(
-      `/events?page=${targetPage}&page_size=${pageSize}`,
+      `/events?page=${page.value}&page_size=${pageSize}`, undefined, true, 'POST', true, signal,
     )
+    if (!isCurrent()) return
     events.value = payload.events
     page.value = payload.page
     totalEvents.value = payload.total
     error.value = ''
   } catch (failure) {
+    if (!isCurrent()) return
     error.value = failure instanceof ApiError ? failure.code : 'service_unavailable'
+    if (error.value === 'unauthenticated') events.value = []
+    throw failure
   } finally {
-    loading.value = false
+    if (isCurrent()) loading.value = false
   }
 }
 
 function changePage(targetPage: number) {
   if (targetPage >= 1 && targetPage <= totalPages.value && targetPage !== page.value) {
-    void loadEvents(targetPage)
+    loading.value = true
+    page.value = targetPage
   }
 }
 
@@ -75,7 +80,7 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat(locale.value, { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(`${value}T00:00:00Z`))
 }
 
-onMounted(loadEvents)
+usePolling(() => String(page.value), loadEvents, { paused: () => saving.value })
 </script>
 
 <template>

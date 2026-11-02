@@ -7,6 +7,7 @@ from urllib.parse import urlsplit
 
 from cryptography.fernet import Fernet
 import pytest
+from sqlalchemy import event as sqlalchemy_event
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -83,6 +84,90 @@ def test_authenticated_user_creates_private_event(account_app) -> None:
 
     client.delete_cookie(COOKIE_NAME)
     assert client.get("/api/events").status_code == 401
+
+
+def test_conditional_event_reads_recheck_access_and_change_with_roster(account_app) -> None:
+    admin = account_app.test_client()
+    csrf = register(admin, account_app, "conditional-admin@example.com")
+    event_id = create_event(admin, account_app, csrf).json["event"]["id"]
+    path = f"/api/events/{event_id}"
+    first = admin.get(path)
+
+    assert first.headers.get("ETag")
+    etag = first.headers["ETag"]
+    unchanged = admin.get(path, headers={"If-None-Match": etag})
+    assert unchanged.status_code == 304
+    assert unchanged.data == b""
+    assert unchanged.headers["Cache-Control"] == "no-store"
+    post(admin, account_app, csrf, f"{path}/participants", {"name": "New member"})
+    updated = admin.get(path, headers={"If-None-Match": etag})
+    assert updated.status_code == 200
+    assert updated.headers["ETag"] != etag
+    outsider = account_app.test_client()
+    register(outsider, account_app, "conditional-outsider@example.com")
+    assert outsider.get(path, headers={"If-None-Match": updated.headers["ETag"]}).status_code == 404
+    admin.delete_cookie(COOKIE_NAME)
+    assert admin.get(path, headers={"If-None-Match": etag}).status_code == 401
+
+
+def test_invitation_secrets_never_receive_conditional_validators(account_app) -> None:
+    admin = account_app.test_client()
+    csrf = register(admin, account_app, "secret-cache@example.com")
+    event_id = create_event(admin, account_app, csrf).json["event"]["id"]
+    path = f"/api/events/{event_id}/invite-link"
+    post(admin, account_app, csrf, path, {})
+
+    response = admin.get(path)
+
+    assert response.status_code == 200
+    assert "ETag" not in response.headers
+    assert response.headers["Cache-Control"] == "no-store"
+
+
+def test_recipient_get_requires_an_existing_reveal_and_is_never_cached(account_app) -> None:
+    admin, csrf, event_id, participant_ids = create_claimed_event(account_app, 3, "recipient-read")
+    post(admin, account_app, csrf, f"/api/events/{event_id}/drawing", {})
+    member = account_app.test_client()
+    login_csrf = member.get("/api/auth/csrf").json["csrf_token"]
+    login = post(member, account_app, login_csrf, "/api/auth/login", {
+        "email": "recipient-read-0@example.com", "password": "correct horse battery staple",
+    })
+    path = f"/api/events/{event_id}/reveal"
+
+    assert member.get(path).status_code == 404
+    assert admin.get(path).status_code == 404
+    revealed = post(member, account_app, login.json["csrf_token"], path, {})
+    retrieved = member.get(path)
+
+    assert retrieved.status_code == 200
+    assert retrieved.json == revealed.json
+    assert "ETag" not in retrieved.headers
+    assert retrieved.headers["Cache-Control"] == "no-store"
+
+
+@pytest.mark.parametrize("event_count", [1, 10])
+def test_event_listing_query_count_is_bounded(account_app, event_count: int) -> None:
+    admin = account_app.test_client()
+    csrf = register(admin, account_app, "query-count@example.com")
+    for index in range(event_count):
+        event_id = create_event(admin, account_app, csrf, f"Exchange {index}").json["event"]["id"]
+        post(admin, account_app, csrf, f"/api/events/{event_id}/participants", {"name": "Roster member"})
+    statements = []
+
+    def count_query(connection, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    engine = account_app.extensions["database"]
+    sqlalchemy_event.listen(engine, "before_cursor_execute", count_query)
+    try:
+        response = admin.get("/api/events")
+    finally:
+        sqlalchemy_event.remove(engine, "before_cursor_execute", count_query)
+
+    assert response.status_code == 200
+    assert len(response.json["events"]) == event_count
+    assert all(len(entry["participants"]) == 1 for entry in response.json["events"])
+    assert len(statements) <= 6
 
 
 @pytest.mark.parametrize(("field", "value"), [

@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
 import { ApiError, request, type GiftRecord } from '../api'
+import { usePolling } from '../polling'
 
 interface EventWishlistContext {
   event: { id: string; name: string; budget: string | null; currency: 'EUR' | 'PLN' }
@@ -34,28 +35,39 @@ function resetForm() {
   editingGiftId.value = ''
 }
 
-async function loadWishlist() {
-  loading.value = true
-  error.value = ''
+async function loadWishlist(signal?: AbortSignal, isCurrent: () => boolean = () => true) {
   try {
     if (participantView.value) {
       const payload = await request<EventWishlistContext>(
         `/events/${eventId.value}/participants/${participantId.value}/wishlist`,
+        undefined, true, 'POST', true, signal,
       )
+      if (!isCurrent()) return
       event.value = payload.event
       participant.value = payload.participant
       gifts.value = payload.gifts
     } else {
-      const payload = await request<{ gifts: GiftRecord[]; order_version: number }>('/wishlist')
+      const payload = await request<{ gifts: GiftRecord[]; order_version: number }>(
+        '/wishlist', undefined, true, 'POST', true, signal,
+      )
+      if (!isCurrent()) return
       gifts.value = payload.gifts
       orderVersion.value = payload.order_version
       event.value = null
       participant.value = null
     }
+    error.value = ''
   } catch (failure) {
+    if (!isCurrent()) return
     error.value = failure instanceof ApiError ? failure.code : 'service_unavailable'
+    if (['not_found', 'unauthenticated'].includes(error.value)) {
+      gifts.value = []
+      event.value = null
+      participant.value = null
+    }
+    if (signal) throw failure
   } finally {
-    loading.value = false
+    if (isCurrent()) loading.value = false
   }
 }
 
@@ -163,7 +175,21 @@ function exceedsBudget(gift: GiftRecord): boolean {
   return toCents(gift.price) > toCents(event.value.budget)
 }
 
-watch([eventId, participantId], loadWishlist, { immediate: true })
+watch([eventId, participantId], () => {
+  formOpen.value = false
+  resetForm()
+  notice.value = ''
+  error.value = ''
+})
+usePolling(() => `${eventId.value}/${participantId.value}`, async (signal, isCurrent) => {
+  if (event.value?.id !== (eventId.value || undefined) || participant.value?.id !== (participantId.value || undefined)) {
+    gifts.value = []
+    event.value = null
+    participant.value = null
+    loading.value = true
+  }
+  await loadWishlist(signal, isCurrent)
+}, { paused: () => saving.value || formOpen.value })
 </script>
 
 <template>
