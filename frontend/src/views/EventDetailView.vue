@@ -434,11 +434,9 @@ usePolling(() => eventId.value, loadEvent, {
         </div>
         <dl class="event-facts">
           <div><dt>{{ t('exchangeDate') }}</dt><dd>{{ formatDate(event.exchange_date) }}</dd></div>
-          <div><dt>{{ t('exchangeTime') }}</dt><dd>{{ event.exchange_time || t('notSet') }}</dd></div>
-          <div><dt>{{ t('timeZone') }}</dt><dd>{{ event.time_zone }}</dd></div>
           <div><dt>{{ t('budget') }}</dt><dd>{{ event.budget ? `${event.budget} ${event.currency}` : `${t('notSet')} (${event.currency})` }}</dd></div>
           <div><dt>{{ t('location') }}</dt><dd>{{ event.location || t('notSet') }}</dd></div>
-          <div class="event-fact-wide"><dt>{{ t('description') }}</dt><dd>{{ event.description || t('notSet') }}</dd></div>
+          <div><dt>{{ t('description') }}</dt><dd>{{ event.description || t('notSet') }}</dd></div>
         </dl>
       </section>
 
@@ -486,8 +484,6 @@ usePolling(() => eventId.value, loadEvent, {
           <label><span>{{ t('eventName') }}</span><input v-model="form.name" name="name" maxlength="120" required></label>
           <div class="event-form-grid">
             <label><span>{{ t('exchangeDate') }}</span><input v-model="form.exchange_date" name="exchange_date" type="date" required></label>
-            <label><span>{{ t('exchangeTime') }}</span><input v-model="form.exchange_time" name="exchange_time" type="time"></label>
-            <label><span>{{ t('timeZone') }}</span><input v-model="form.time_zone" name="time_zone" maxlength="64" required></label>
             <label>
               <span>{{ t('currency') }}</span>
               <select v-model="form.currency" name="currency"><option value="EUR">EUR</option><option value="PLN">PLN</option></select>

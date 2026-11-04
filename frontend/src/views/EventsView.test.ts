@@ -115,9 +115,10 @@ describe('event management views', () => {
   })
 
   it('shows event details read-only until the admin chooses to edit', async () => {
-    const updated = { ...event, name: 'Renamed exchange' }
+    const detailEvent = { ...event, exchange_time: '18:30' }
+    const updated = { ...detailEvent, name: 'Renamed exchange' }
     request.mockImplementation((path: string, body?: object) => {
-      if (path === '/events/event-1' && !body) return Promise.resolve({ event })
+      if (path === '/events/event-1' && !body) return Promise.resolve({ event: detailEvent })
       if (path === '/events/event-1' && body) return Promise.resolve({ event: updated })
       return Promise.reject(new Error(`Unexpected request: ${path}`))
     })
@@ -133,12 +134,22 @@ describe('event management views', () => {
     await flushPromises()
 
     expect(wrapper.find('input[name="name"]').exists()).toBe(false)
+    expect(wrapper.get('.event-facts').text()).toContain('December 20, 2026')
+    expect(wrapper.get('.event-facts').text()).not.toContain('Exchange time')
+    expect(wrapper.get('.event-facts').text()).not.toContain('Time zone')
+    expect(wrapper.get('.event-facts').text()).not.toContain('18:30')
+    expect(wrapper.get('.event-facts').text()).not.toContain('Europe/Warsaw')
     await wrapper.get('button.edit-event-button').trigger('click')
+    expect(wrapper.find('input[name="exchange_time"]').exists()).toBe(false)
+    expect(wrapper.find('input[name="time_zone"]').exists()).toBe(false)
+    expect(wrapper.get<HTMLInputElement>('input[name="exchange_date"]').element.value).toBe('2026-12-20')
     await wrapper.get('input[name="name"]').setValue('Renamed exchange')
     await wrapper.get('form.detail-form').trigger('submit')
     await flushPromises()
 
-    expect(request).toHaveBeenCalledWith('/events/event-1', expect.objectContaining({ name: 'Renamed exchange' }), true, 'PATCH')
+    expect(request).toHaveBeenCalledWith('/events/event-1', expect.objectContaining({
+      name: 'Renamed exchange', exchange_date: '2026-12-20', exchange_time: '18:30', time_zone: 'Europe/Warsaw',
+    }), true, 'PATCH')
     expect(wrapper.find('input[name="name"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('Renamed exchange')
     wrapper.unmount()
