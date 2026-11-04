@@ -46,10 +46,10 @@ def create_invited_event(app, entry_names: tuple[str, ...]):
 
 
 @pytest.mark.integration
-def test_competing_admin_transfers_are_serialized(migrated_app) -> None:
+def test_competing_transfer_attempts_preserve_creator_admin(migrated_app) -> None:
     app, unused_config = migrated_app
     admin, admin_csrf, event_id, participant_ids, token = create_invited_event(app, ("Morgan", "Riley"))
-    for index, participant_id in enumerate(participant_ids):
+    for participant_id in participant_ids:
         member = app.test_client()
         member_csrf = register(member, app, f"transfer-member-{uuid4()}@example.com")
         claimed = member.post(f"/api/events/{event_id}/claim", json={
@@ -80,13 +80,10 @@ def test_competing_admin_transfers_are_serialized(migrated_app) -> None:
         ]
         statuses = [future.result() for future in futures]
 
-    assert sorted(statuses) == [200, 404]
+    assert statuses == [404, 404]
     with Session(app.extensions["database"]) as database:
         event = database.get(Event, event_id)
-        assert event.admin_id in {
-            database.get(EventParticipant, participant_ids[0]).user_id,
-            database.get(EventParticipant, participant_ids[1]).user_id,
-        }
+        assert event.admin_id == admin_user["id"]
 
 
 @pytest.mark.integration

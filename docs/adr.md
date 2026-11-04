@@ -40,6 +40,8 @@ Each record states context, decision/pattern, rationale and alternatives, implem
 
 **Implementation:** Model users, sessions, tokens, events, roster entries, draw generations, assignments, gifts, and outbox messages. Use an event admin foreign key for single ownership; unique wishlist ownership; unique `(event_id, user_id)` for non-null claims; unique giver and recipient per draw generation; no-self checks; and foreign keys ensuring assignments refer to the correct event roster. Use tombstoned roster references rather than deleting assignment identities. Store money as decimal/numeric, require currency with a known price, and represent unknown price as null.
 
+**Ownership simplification (2026-11-04):** The creator is the sole event administrator; admin transfer is removed from the API and UI. Set the existing admin foreign key at creation and do not reassign it. Account deletion requires cancellation of every administered event, including archived events; cleanup still detaches the deleted account from retained cancelled events. No schema migration is required. Previously transferred events retain their current administrator because no separate original-creator identity was stored; do not guess or silently reassign legacy ownership.
+
 **Verification:** Run migrations from an empty PostgreSQL database and upgrade fixtures. Assert constraint violations and referential integrity, not just ORM validation. Production-equivalent integration tests cannot be replaced by SQLite tests.
 
 ## ADR-004: State Guards and Transactional Concurrency
@@ -50,7 +52,7 @@ Each record states context, decision/pattern, rationale and alternatives, implem
 
 **Rationale/alternatives:** In-process locks fail across workers. Optimistic UI checks alone cannot protect server invariants. Database transactions and constraints are sufficient without distributed locks.
 
-**Implementation:** Keep exchange-date grouping separate from drawing, archive, and cancellation state. Lock the event first for claims, roster changes, enable/reset/reveal, cancellation, transfer, and deletion; then validate and mutate in one transaction. Reveal is idempotent; repeated enable cannot regenerate an active draw. Reset is allowed after reveals while the event remains writable; under the event lock it deletes all assignments and the generation row, then clears both drawing flags. Use version checks for event-detail and wishlist-order edits to prevent lost updates. Keep external network calls outside transactions and define a consistent lock order for account cleanup.
+**Implementation:** Keep exchange-date grouping separate from drawing, archive, and cancellation state. Lock the event first for claims, roster changes, enable/reset/reveal, cancellation, and deletion; then validate and mutate in one transaction. Reveal is idempotent; repeated enable cannot regenerate an active draw. Reset is allowed after reveals while the event remains writable; under the event lock it deletes all assignments and the generation row, then clears both drawing flags. Use version checks for event-detail and wishlist-order edits to prevent lost updates. Keep external network calls outside transactions and define a consistent lock order for account cleanup.
 
 **Verification:** Use independent PostgreSQL connections to force racing operations. Prove no partial draw, double claim, reset/reveal ordering that leaves stale assignments, or multiple-admin outcome is possible. A reset that serializes after reveal succeeds and deletes the revealed generation. Return a recoverable conflict rather than hiding a race.
 
@@ -170,7 +172,7 @@ Log request ID, route template, status, duration, operation, and opaque identifi
 
 **Implementation:** After approved admin-departure handling, revoke sessions/tokens, remove wishlist/profile data, detach user references, and replace retained identity labels consistently. Remove pending personal email payloads. Preserve opaque participant/assignment references. Apply the approved policy to names that themselves contain personal data. Keep only the opaque account ID and deletion timestamp in the deletion ledger; restore tooling reapplies those records before access is reopened. Keep the ledger separately from restorable snapshots, expire backups within 30 days, and do not promise immediate physical deletion from retained backups.
 
-**Verification:** Deletion fixtures before and after drawing, admin handover scenarios, stale-token rejection, history integrity, and checks for retained identifying fields. Product ambiguities must be settled through plan step 0.1 before implementation.
+**Verification:** Deletion fixtures before and after drawing, required cancellation of administered events, stale-token rejection, history integrity, and checks for retained identifying fields. Product ambiguities must be settled through plan step 0.1 before implementation.
 
 ## ADR-014: Risk-Based Testing and Continuous Delivery
 

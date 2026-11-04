@@ -51,7 +51,7 @@ This is a backlog, not a fixed-date schedule. Phase order expresses dependencies
 
 - [x] P0.1a: Confirm what an invite holder may see before claiming. Recommend a minimal claim screen containing roster names and availability, but no wishlists, private event details, or assignments.
 - [x] P0.1b: Confirm deletion eligibility after drawing has been enabled and subsequently reset. The original lifetime-history recommendation is superseded by the approved Phase 5 rollback: a confirmed reset erases the draw, including after reveals, and restores deletion eligibility; users must be warned participants may remember old recipients.
-- [x] P0.1c: Confirm account deletion for the sole admin and for active exchanges. Recommend requiring admin transfer or cancellation before admin deletion; preserve participant references as tombstones without reassigning recipients.
+- [x] P0.1c: Confirm account deletion for the sole admin and for active exchanges. Require cancellation of administered events before admin deletion; preserve participant references as tombstones without reassigning recipients. Admin transfer was removed by the approved 2026-11-04 simplification.
 - [x] P0.1d: Clarify that archiving freezes event operations, not the user's global wishlist; decide whether already revealed recipients remain readable in archived/cancelled events. Recommend retaining previously revealed access without allowing new reveals.
 - [x] P0.1e: Define supported gift currencies, price precision/ranges, input size limits, invite lifetime, and session/token lifetimes. Recommend EUR/PLN for gift prices, nonnegative decimal values, and bounded configurable limits.
 - [x] P0.1f: Confirm whether deleting a profile also requires anonymizing historical roster names, and document retention and backup deletion expectations. Do not label retained personal names as anonymous.
@@ -243,19 +243,19 @@ Phase 5 is ready for user review at the local review URL. Phase 6 remains blocke
 ### Step 6.1: Event lifecycle
 
 - [x] P6.1a: Implement archive/unarchive, cancellation, and permanent deletion rules using centralized state guards.
-- [x] P6.1b: Implement admin transfer as a single transaction to an existing participant.
+- [x] P6.1b: Keep the event creator as its sole administrator; do not allow admin transfer (supersedes the original transfer feature on 2026-11-04).
 - [x] P6.1c: Build confirmation pages/controls and read-only cancelled/archived views; preserve date grouping independently.
-- [x] P6.1d: Test every mutation against archived/cancelled states, concurrent transfer, deletion eligibility after a full post-reveal reset, and retained reveal access when no reset occurs.
+- [x] P6.1d: Test every mutation against archived/cancelled states, rejection of concurrent transfer attempts, deletion eligibility after a full post-reveal reset, and retained reveal access when no reset occurs.
 
 ### Step 6.2: Account deletion
 
-- [x] P6.2a: Implement reauthenticated deletion and admin handover/cancellation requirements established in P0.1c.
+- [x] P6.2a: Implement reauthenticated deletion and required cancellation of administered events established in P0.1c.
 - [x] P6.2b: Delete profile, wishlist, sessions, tokens, and queued personal payloads; anonymize retained identity references without changing assignments.
 - [x] P6.2c: Build deletion confirmation and neutral deleted-user views.
 - [x] P6.2d: Test deletion before/after draw, retained recipient references, private data removal, and old-session rejection.
 - [x] P6.2e: Document backup expiry and the distinction between logical deletion and removal from retained backups.
 
-**Acceptance:** Read-only boundaries, transfer, and deletion work without reassignment or unintended disclosure.
+**Acceptance:** Read-only boundaries, creator-only administration, and deletion work without reassignment or unintended disclosure.
 
 ### Phase 6 Verification Checkpoint
 
@@ -264,6 +264,8 @@ Verified locally on 2026-10-26: 89 backend unit/API tests and 17 PostgreSQL inte
 Phase 6 is ready for user review using the [README review steps](../README.md#phase-6-review). The local API, frontend, email worker, and PostgreSQL service are running for review. Automated off-site retention of the deletion ledger and backup restoration rehearsal remain Phase 7 operational gates. Phase 7 is blocked until the user verifies Phase 6 and separately authorizes it.
 
 ## Phase 7: Operational Readiness and Release
+
+**Scope revision (2026-11-04):** Admin transfer was removed after user review. The event creator remains its sole administrator, and account deletion requires cancellation of administered events, including archived events. The Phase 6 checkpoint above records the original implementation, not the current transfer policy. Existing previously transferred events retain their current administrator because the original creator was not stored separately; see ADR-003.
 
 **Outcome:** A deployable, observable, recoverable v1. Operational safeguards from earlier phases remain mandatory. Phase 7 implementation is partially locally verified; production deployment and release remain blocked by the open gates below.
 

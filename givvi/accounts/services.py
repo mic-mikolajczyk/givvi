@@ -196,7 +196,7 @@ def delete_account(database: Session, user: User, body: dict) -> None:
         Event.cancelled.is_(False),
     ).limit(1).with_for_update())
     if active_admin_event:
-        raise ApiError("admin_events_require_handover", 409)
+        raise ApiError("admin_events_require_cancellation", 409)
 
     database.add(AccountDeletionRecord(user_id=user.id, deleted_at=now()))
     _erase_account_data(database, user.id)

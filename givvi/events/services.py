@@ -312,20 +312,6 @@ def delete_event(database: Session, event: Event) -> None:
     database.delete(event)
 
 
-def transfer_admin(database: Session, event: Event, participant_id: object) -> None:
-    if event.archived or event.cancelled:
-        raise ApiError("event_read_only", 409)
-    if not isinstance(participant_id, str):
-        raise ApiError("invalid_request", 400)
-    participant = database.scalar(select(EventParticipant).where(
-        EventParticipant.id == participant_id,
-        EventParticipant.event_id == event.id,
-    ).with_for_update())
-    if not participant or not participant.user_id or participant.user_id == event.admin_id:
-        raise ApiError("transfer_target_invalid", 409)
-    event.admin_id = participant.user_id
-
-
 def add_participant(database: Session, event: Event, name: object) -> EventParticipant:
     require_writable(event)
     participants = roster(database, event.id, lock=True)

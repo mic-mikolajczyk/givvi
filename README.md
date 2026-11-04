@@ -147,9 +147,9 @@ Screenshots and failure traces are written under the ignored frontend test-resul
 ## Phase 6 Review
 
 1. As an organizer, archive an event and confirm it is read-only; unarchive it and confirm editing returns. Cancel it and confirm it remains visible but read-only, with no invite or reveal actions.
-2. On a separate event, claim a roster entry from another account and transfer administration to that participant. Confirm the previous admin loses admin controls and the new admin gains them.
+2. On a separate event, claim a roster entry from another account. Confirm the creator keeps admin controls, the participant has no admin controls, and administration cannot be transferred.
 3. Enable a draw, reveal a recipient, then archive or cancel the event. Confirm the participant can still read the same previously revealed recipient, while a participant who has not revealed cannot reveal after the transition.
-4. Try deleting an account that still administers an active event and confirm it is rejected. Cancel or transfer the event, then delete with the current password. Confirm sessions are revoked, the canceled event remains, participant names become “Deleted user,” and assignments do not change.
+4. Try deleting an account that still administers an active or archived event and confirm it is rejected. Cancel the event, then delete with the current password. Confirm sessions are revoked, the canceled event remains, participant names become “Deleted user,” and assignments do not change.
 5. Confirm a draw cannot be deleted until reset, including after a reveal; after reset, event deletion is available. Check English and Polish on desktop and a narrow mobile viewport.
 6. Run `.venv/bin/python -m pytest -q`, the PostgreSQL integration suite, `npm --prefix frontend test`, and the browser suite. Review the Phase 6 checkpoint before authorizing Phase 7.
 
@@ -164,6 +164,8 @@ Backups containing deleted profile data must expire within 30 days. Before resto
 The Phase 7 implementation has local test, container-build, dependency/image-scan, query/load, and isolated recovery evidence recorded in [the delivery plan](docs/plan.md) and [Session 7](SESSION_7.md). This is not a production-readiness or release approval. In particular, the API/web HTTPS smoke did not pass, and managed database TLS/roles, production SMTP, alert delivery, off-site backups and deletion-ledger retention, managed restore, manual accessibility review, and a closed-group pilot still require verification. Use the [operations guide](docs/operations.md) for deployment prerequisites and recovery procedures; do not deploy until the open gates are closed.
 
 ## Upgrading Existing Development Data
+
+Admin transfer has been removed. New events keep their creator as administrator. No schema migration is needed for this change; previously transferred events keep their current administrator because the original creator was not stored separately.
 
 Stop the API and email worker, run `.venv/bin/flask --env-file .env.example --app givvi db-upgrade`, then restart both. The forward migration retains users/passwords, removes registration-verification state, and invalidates old signup tokens. The worker purges obsolete queued account emails instead of sending dead links. Existing accounts can sign in without an onboarding step. Downgrading restores the old schema but cannot restore removed tokens or previous verification timestamps.
 

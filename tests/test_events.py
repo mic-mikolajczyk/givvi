@@ -311,7 +311,7 @@ def test_event_delete_requires_draw_to_be_reset(account_app) -> None:
     assert admin.delete(f"/api/events/{event_id}", headers=headers).status_code == 200
 
 
-def test_admin_transfers_ownership_to_claimed_participant(account_app) -> None:
+def test_event_creator_remains_admin_after_transfer_attempts(account_app) -> None:
     admin = account_app.test_client()
     admin_csrf = register(admin, account_app, "transfer-admin@example.com")
     event_id = create_event(admin, account_app, admin_csrf).json["event"]["id"]
@@ -329,43 +329,20 @@ def test_admin_transfers_ownership_to_claimed_participant(account_app) -> None:
     member_transfer = post(member, account_app, member_csrf, f"/api/events/{event_id}/transfer", {
         "participant_id": participant_id,
     })
-    assert member_transfer.status_code == 403
+    assert member_transfer.status_code == 404
 
     transferred = admin.post(f"/api/events/{event_id}/transfer", json={"participant_id": participant_id},
                              headers=headers)
 
-    assert transferred.status_code == 200
-    assert transferred.json["event"]["is_admin"] is False
-    assert member.get(f"/api/events/{event_id}").json["event"]["is_admin"] is True
-    assert admin.post(f"/api/events/{event_id}/participants", json={"name": "No longer admin"},
-                      headers=headers).status_code == 404
-
-
-def test_admin_transfer_rejects_unclaimed_roster_entry(account_app) -> None:
-    client = account_app.test_client()
-    csrf = register(client, account_app, "transfer-unclaimed@example.com")
-    event_id = create_event(client, account_app, csrf).json["event"]["id"]
-    participant_id = post(client, account_app, csrf, f"/api/events/{event_id}/participants", {
-        "name": "Not claimed",
-    }).json["participant"]["id"]
-
-    response = post(client, account_app, csrf, f"/api/events/{event_id}/transfer", {"participant_id": participant_id})
-
-    assert response.status_code == 409
-
-
-@pytest.mark.parametrize("lifecycle_action", ["archive", "cancel"])
-def test_admin_transfer_is_blocked_for_read_only_event(account_app, lifecycle_action: str) -> None:
-    client = account_app.test_client()
-    csrf = register(client, account_app, f"transfer-readonly-{lifecycle_action}@example.com")
-    event_id = create_event(client, account_app, csrf).json["event"]["id"]
-    headers = {"X-CSRF-Token": csrf, "Origin": account_app.config["APP_ORIGIN"]}
-    assert client.post(f"/api/events/{event_id}/{lifecycle_action}", headers=headers).status_code == 200
-
-    response = post(client, account_app, csrf, f"/api/events/{event_id}/transfer", {"participant_id": "missing"})
-
-    assert response.status_code == 409
-    assert response.json["code"] == "event_read_only"
+    assert transferred.status_code == 404
+    assert admin.get(f"/api/events/{event_id}").json["event"]["is_admin"] is True
+    assert member.get(f"/api/events/{event_id}").json["event"]["is_admin"] is False
+    assert post(admin, account_app, admin_csrf, f"/api/events/{event_id}/participants", {
+        "name": "Creator can still manage",
+    }).status_code == 201
+    assert post(member, account_app, member_csrf, f"/api/events/{event_id}/participants", {
+        "name": "Member cannot manage",
+    }).status_code == 403
 
 
 @pytest.mark.parametrize("lifecycle_action", ["archive", "cancel"])

@@ -25,7 +25,6 @@ const error = ref('')
 const notice = ref('')
 const participantName = ref('')
 const inviteEmail = ref('')
-const transferTarget = ref('')
 const inviteLink = ref('')
 const editingParticipant = ref('')
 const editingName = ref('')
@@ -189,20 +188,6 @@ async function changeLifecycle(action: 'archive' | 'unarchive' | 'cancel' | 'del
     inviteLink.value = ''
     if (action === 'unarchive') await loadInviteLink()
     notice.value = `event_${action === 'cancel' ? 'cancelled' : `${action}d`}`
-  } catch (failure) {
-    error.value = failure instanceof ApiError ? failure.code : 'service_unavailable'
-  } finally {
-    lifecycleBusy.value = false
-  }
-}
-
-async function transferAdmin() {
-  if (!transferTarget.value || !window.confirm(t('confirmTransferAdmin'))) return
-  lifecycleBusy.value = true
-  error.value = ''
-  try {
-    await request(`/events/${eventId.value}/transfer`, { participant_id: transferTarget.value })
-    await router.replace('/events')
   } catch (failure) {
     error.value = failure instanceof ApiError ? failure.code : 'service_unavailable'
   } finally {
@@ -493,22 +478,6 @@ usePolling(() => eventId.value, loadEvent, {
             @click="changeLifecycle('delete')"
           ><Trash2 :size="18" aria-hidden="true" />{{ t('deleteEvent') }}</button>
         </div>
-        <form
-          v-if="!event.archived && !event.cancelled && event.participants.some((participant) => participant.claimed)"
-          class="admin-transfer-form"
-          @submit.prevent="transferAdmin"
-        >
-          <label :for="`transfer-target-${event.id}`">{{ t('transferTo') }}</label>
-          <select :id="`transfer-target-${event.id}`" v-model="transferTarget" required :disabled="lifecycleBusy">
-            <option disabled value="">{{ t('transferTo') }}</option>
-            <option v-for="participant in event.participants.filter((item) => item.claimed)" :key="participant.id" :value="participant.id">
-              {{ participant.name }}
-            </option>
-          </select>
-          <button class="secondary-button" type="submit" :disabled="lifecycleBusy || !transferTarget">
-            {{ t('transferAdmin') }}
-          </button>
-        </form>
       </section>
 
       <form v-if="editingDetails" class="event-form detail-form" @submit.prevent="saveEvent">

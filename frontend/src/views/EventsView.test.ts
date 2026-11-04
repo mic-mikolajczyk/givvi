@@ -586,7 +586,7 @@ describe('event management views', () => {
     wrapper.unmount()
   })
 
-  it('transfers event administration to a claimed roster participant', async () => {
+  it('keeps creator management controls without offering administration transfer', async () => {
     const eventWithMember = {
       ...event,
       participants: [{ id: 'participant-1', name: 'Morgan', claimed: true }],
@@ -594,11 +594,8 @@ describe('event management views', () => {
     request.mockImplementation((path: string) => {
       if (path === '/events/event-1') return Promise.resolve({ event: eventWithMember })
       if (path === '/events/event-1/invite-link') return Promise.reject(new ApiError('not_found'))
-      if (path === '/events/event-1/transfer') return Promise.resolve({ event: { ...eventWithMember, is_admin: false } })
-      if (path === '/events?page=1&page_size=50') return Promise.resolve({ events: [], page: 1, total: 0 })
       return Promise.reject(new Error(`Unexpected request: ${path}`))
     })
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     const router = createRouter({ history: createMemoryHistory(), routes: [
       { path: '/events', component: EventsView },
       { path: '/events/:eventId', component: EventDetailView },
@@ -610,12 +607,11 @@ describe('event management views', () => {
     })
     await flushPromises()
 
-    await wrapper.get(`#transfer-target-${event.id}`).setValue('participant-1')
-    await wrapper.get('form.admin-transfer-form').trigger('submit')
-    await flushPromises()
-
-    expect(request).toHaveBeenCalledWith('/events/event-1/transfer', { participant_id: 'participant-1' })
-    expect(router.currentRoute.value.path).toBe('/events')
+    expect(wrapper.find('form.admin-transfer-form').exists()).toBe(false)
+    expect(wrapper.find(`#transfer-target-${event.id}`).exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="Archive event"]').exists()).toBe(true)
+    expect(wrapper.find('button[aria-label="Cancel event"]').exists()).toBe(true)
+    expect(router.currentRoute.value.path).toBe('/events/event-1')
     wrapper.unmount()
   })
 })

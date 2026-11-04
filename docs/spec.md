@@ -22,7 +22,7 @@ An account user registers and signs in using an email address and password. Regi
 
 ### Event admin
 
-Each event has one admin. The creator becomes the initial admin. The admin manages event details, the participant roster, drawing, archive/cancellation, and admin transfer.
+Each event has one admin: its creator. Administration cannot be transferred. The admin manages event details, the participant roster, drawing, and archive/cancellation.
 
 ### Event participant
 
@@ -41,7 +41,7 @@ An account may claim at most one roster entry in an event, and a roster entry ma
 - Secret Santa assignment generation and private participant reveal.
 - Wishlist create, read, update, delete, and priority ordering.
 - Event-scoped wishlist viewing and matching-currency budget highlighting.
-- Event archival, unarchival, cancellation, and admin transfer.
+- Event archival, unarchival, and cancellation.
 - Responsive web interface for mobile and desktop browsers.
 
 ### Out of scope
@@ -86,7 +86,7 @@ An account may claim at most one roster entry in an event, and a roster entry ma
 - The dashboard shows the event details, roster, participant claim status, drawing status, and relevant pending states.
 - A cancelled event remains visible to its participants as read-only with a clear cancelled status. No new assignments are generated or revealed after cancellation.
 - The admin may permanently delete an event only when drawing is not enabled and drawing has not previously been enabled without a reset. Resetting returns the event to pre-draw deletion eligibility.
-- The admin may transfer admin ownership to another event participant. Only one admin is active at a time.
+- The event creator remains its sole admin; admin ownership cannot be transferred to a participant.
 
 ### Roster, invitations, and claims
 
@@ -191,7 +191,7 @@ The following defaults were approved before implementation. They refine the requ
 - Before claiming an entry, a signed-in invite holder can see only roster names and entry availability. Private event details, wishlists, and assignments remain inaccessible until membership is established.
 - Permanent event deletion is allowed only when drawing is not currently enabled. Resetting a draw, even after reveals, restores pre-draw deletion eligibility by clearing drawing history flags.
 - The organizer is not automatically a participant and must claim a roster entry to join the exchange.
-- Deleting an account requires transferring its admin ownership or cancelling affected events first. Existing assignments retain anonymized participant references and are never reassigned as a side effect of deletion.
+- Deleting an account requires cancelling its administered events first, including archived events. Existing assignments retain anonymized participant references and are never reassigned as a side effect of deletion.
 - Archiving freezes event operations, not users' global wishlists. Previously revealed recipients remain readable in archived and cancelled events, but new reveals are blocked. Unarchiving restores event operations only when the event is not cancelled.
 - Gift prices support EUR and PLN. A known price requires an explicit currency. Gift prices and event budgets use two decimal places and must be between 0 and 999,999.99 inclusive.
 - Initial configurable limits are 100 roster entries per event, 200 gifts per wishlist, 120 characters per name, 2,000 characters per description, and 2,048 characters per URL. These are server-side limits, not just form constraints.
