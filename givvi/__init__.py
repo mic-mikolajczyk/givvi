@@ -1,5 +1,6 @@
 from datetime import datetime
 from datetime import timezone
+import ipaddress
 import os
 from pathlib import Path
 import secrets
@@ -40,6 +41,11 @@ def validate_production_config(app: Flask) -> None:
     if app.config["ENVIRONMENT"] != "production":
         return
     origin = urlsplit(app.config["APP_ORIGIN"])
+    try:
+        ipaddress.ip_address(origin.hostname or "")
+        origin_is_ip_address = True
+    except ValueError:
+        origin_is_ip_address = False
     database = make_url(app.config["DATABASE_URL"])
     unsafe_settings = [
         setting
@@ -49,7 +55,8 @@ def validate_production_config(app: Flask) -> None:
             ("COOKIE_SECURE", not app.config["COOKIE_SECURE"]),
             ("FLASK_DEBUG", os.environ.get("FLASK_DEBUG", "0").casefold() not in ("0", "false", "")),
             ("APP_ORIGIN", (
-                origin.scheme != "https" or not origin.hostname or origin.username or origin.password
+                origin.scheme != "https" or not origin.hostname or origin_is_ip_address
+                or origin.username or origin.password
                 or origin.path not in ("", "/") or origin.query or origin.fragment
             )),
             ("DATABASE_URL", (

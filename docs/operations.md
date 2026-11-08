@@ -12,6 +12,8 @@ This guide describes the production Compose setup and recovery controls. It is n
 
 The repository does not provision managed PostgreSQL, SMTP, monitoring, external alert delivery, off-site backup retention, or a backup schedule. Configure and test those with the chosen providers before use.
 
+`GIVVI_DOMAIN` must be a DNS hostname pointing to the deployment host, not its IP address. Caddy uses a local certificate for IP-only sites, which browsers and ordinary `curl` clients do not trust; production configuration rejects IP-address origins.
+
 ## Configuration and Secrets
 
 Set these non-secret variables in the deployment environment, not in a committed file:

@@ -70,6 +70,8 @@ def test_unavailable_database_does_not_leak_connection_details(caplog: pytest.Lo
     {"TESTING": True},
     {"COOKIE_SECURE": False},
     {"APP_ORIGIN": "http://givvi.example"},
+    {"APP_ORIGIN": "https://31.70.122.87"},
+    {"APP_ORIGIN": "https://[2001:db8::1]"},
     {"APP_ORIGIN": "https://givvi.example/path"},
     {"DATABASE_URL": "sqlite://"},
     {"DATABASE_URL": "postgresql+psycopg://givvi@db/givvi?sslmode=require"},
