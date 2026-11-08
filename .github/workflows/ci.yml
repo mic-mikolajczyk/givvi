@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    services:
+      mailpit:
+        image: axllent/mailpit:v1.27.8
+        ports:
+          - 1025:1025
+          - 8025:8025
+      postgres:
+        image: postgres:17.6-bookworm
+        env:
+          POSTGRES_USER: givvi
+          POSTGRES_DB: givvi_test
+          POSTGRES_PASSWORD: test-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U givvi -d givvi_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      GIVVI_DATABASE_URL: postgresql+psycopg://givvi:test-only-password@127.0.0.1:5432/givvi_test
+      GIVVI_TEST_DATABASE_URL: postgresql+psycopg://givvi:test-only-password@127.0.0.1:5432/givvi_test
+      GIVVI_OUTBOX_KEY: MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=
+      GIVVI_COOKIE_SECURE: 'false'
+      GIVVI_APP_ORIGIN: http://127.0.0.1:5173
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install backend dependencies
+        run: python -m venv .venv && .venv/bin/python -m pip install -r requirements-dev.txt
+      - name: Check Python style
+        run: .venv/bin/python -m flake8 givvi tests migrations && .venv/bin/python -m isort --check-only givvi tests migrations
+      - name: Run backend tests
+        env:
+          GIVVI_ROLLBACK_REF: ${{ github.event.pull_request.base.sha || 'HEAD^' }}
+        run: .venv/bin/python -m pytest -q && .venv/bin/python -m pytest -m integration -q
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
+      - name: Check frontend
+        run: npm --prefix frontend run lint && npm --prefix frontend test && npm --prefix frontend run build
+      - name: Audit dependencies
+        run: .venv/bin/pip-audit --local --progress-spinner off && npm --prefix frontend audit --audit-level=high
+      - name: Install browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Run browser tests
+        run: |
+          .venv/bin/flask --app givvi db-upgrade
+          .venv/bin/flask --app givvi mail-worker --watch &
+          worker_pid=$!
+          trap 'kill "$worker_pid"' EXIT
+          npm --prefix frontend run test:e2e
+      - name: Upload browser artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-failure-artifacts
+          path: frontend/test-results/
+          retention-days: 7
+
+  containers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate production configuration
+        env:
+          GIVVI_DOMAIN: givvi.example
+          GIVVI_SMTP_HOST: smtp.example
+          GIVVI_SMTP_FROM: noreply@givvi.example
+          GIVVI_SECRETS_DIR: /tmp/givvi-secrets
+        run: docker compose -f deploy/compose.yaml config --quiet
+      - name: Build production images
+        run: |
+          docker build --pull -f deploy/api.Dockerfile -t givvi-api:ci .
+          docker build --pull -f deploy/web.Dockerfile -t givvi-web:ci .
+      - name: Check non-root images and HTTPS configuration
+        run: |
+          test "$(docker image inspect givvi-api:ci --format '{{.Config.User}}')" = '10001:10001'
+          test "$(docker image inspect givvi-web:ci --format '{{.Config.User}}')" = '10001:10001'
+          docker run --rm -e GIVVI_DOMAIN=givvi.example givvi-web:ci caddy validate --config /etc/caddy/Caddyfile
+      - name: Scan runtime images
+        run: |
+          for image in givvi-api:ci givvi-web:ci; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy-cache:/root/.cache/ \
+              aquasec/trivy:0.66.0 image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$image"
+          done

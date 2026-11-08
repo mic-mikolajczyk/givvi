@@ -1,0 +1,9 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-m 'not integration'"
+markers = ["integration: requires a real PostgreSQL database"]
+
+[tool.isort]
+profile = "google"
+line_length = 125
