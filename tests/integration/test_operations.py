@@ -26,6 +26,16 @@ from givvi.models import Gift
 from givvi.models import User
 from givvi.models import Wishlist
 
+
+@pytest.mark.integration
+def test_database_timeouts_are_set_for_each_transaction(migrated_app) -> None:
+    app, unused_config = migrated_app
+
+    with app.extensions["database"].connect() as connection:
+        assert connection.scalar(text("SHOW statement_timeout")) == "10s"
+        assert connection.scalar(text("SHOW lock_timeout")) == "3s"
+
+
 GROUP_SIZE = 12
 LOAD_WORKERS = 4
 READS_PER_MEMBER = 8

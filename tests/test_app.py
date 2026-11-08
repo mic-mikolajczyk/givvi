@@ -139,3 +139,24 @@ def test_production_rejects_flask_debug_environment(monkeypatch) -> None:
             "OUTBOX_KEY": Fernet.generate_key().decode(), "METRICS_TOKEN": "operator-only-test-token-at-least-32-chars",
             "APP_ORIGIN": "https://givvi.example", "SMTP_TLS": True,
         })
+
+
+def test_production_error_identifies_invalid_settings_without_values() -> None:
+    config = {
+        "ENVIRONMENT": "production",
+        "DATABASE_URL": "postgresql+psycopg://private_user:private_password@db/private_database?sslmode=require",
+        "OUTBOX_KEY": Fernet.generate_key().decode(),
+        "METRICS_TOKEN": "operator-only-test-token-at-least-32-chars",
+        "APP_ORIGIN": "http://givvi.example",
+        "SMTP_TLS": False,
+    }
+
+    with pytest.raises(RuntimeError) as error:
+        create_app(config)
+
+    message = str(error.value)
+    assert "APP_ORIGIN" in message
+    assert "DATABASE_URL" in message
+    assert "SMTP_TLS" in message
+    for sensitive_value in ("private_user", "private_password", "private_database"):
+        assert sensitive_value not in message

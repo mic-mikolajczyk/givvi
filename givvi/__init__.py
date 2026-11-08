@@ -9,6 +9,8 @@ from argon2 import PasswordHasher
 from cryptography.fernet import Fernet
 from flask import Flask
 from sqlalchemy import create_engine
+from sqlalchemy import event
+from sqlalchemy.engine import Connection
 from sqlalchemy.engine import make_url
 
 from givvi.accounts.controller import accounts
@@ -19,6 +21,19 @@ from givvi.health import health
 from givvi.wishlists.controller import wishlists
 
 DATABASE_CONNECT_TIMEOUT_SECONDS = 3
+DATABASE_STATEMENT_TIMEOUT = "10s"
+DATABASE_LOCK_TIMEOUT = "3s"
+
+
+def set_database_transaction_timeouts(connection: Connection) -> None:
+    connection.exec_driver_sql(
+        "SELECT set_config('statement_timeout', %s, true)",
+        (DATABASE_STATEMENT_TIMEOUT,)
+    )
+    connection.exec_driver_sql(
+        "SELECT set_config('lock_timeout', %s, true)",
+        (DATABASE_LOCK_TIMEOUT,)
+    )
 
 
 def validate_production_config(app: Flask) -> None:
@@ -26,18 +41,33 @@ def validate_production_config(app: Flask) -> None:
         return
     origin = urlsplit(app.config["APP_ORIGIN"])
     database = make_url(app.config["DATABASE_URL"])
-    unsafe = any((
-        app.debug, app.testing, not app.config["COOKIE_SECURE"],
-        os.environ.get("FLASK_DEBUG", "0").casefold() not in ("0", "false", ""),
-        origin.scheme != "https", not origin.hostname, origin.username, origin.password,
-        origin.path not in ("", "/"), origin.query, origin.fragment,
-        database.get_backend_name() != "postgresql", database.query.get("sslmode") != "verify-full",
-        not app.config["SMTP_TLS"], len(app.config.get("METRICS_TOKEN", "")) < 32,
-        app.config.get("OUTBOX_KEY") == "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=",
-    ))
-    if unsafe:
+    unsafe_settings = [
+        setting
+        for setting, unsafe in (
+            ("DEBUG", app.debug),
+            ("TESTING", app.testing),
+            ("COOKIE_SECURE", not app.config["COOKIE_SECURE"]),
+            ("FLASK_DEBUG", os.environ.get("FLASK_DEBUG", "0").casefold() not in ("0", "false", "")),
+            ("APP_ORIGIN", (
+                origin.scheme != "https" or not origin.hostname or origin.username or origin.password
+                or origin.path not in ("", "/") or origin.query or origin.fragment
+            )),
+            ("DATABASE_URL", (
+                database.get_backend_name() != "postgresql"
+                or database.query.get("sslmode") != "verify-full"
+            )),
+            ("SMTP_TLS", not app.config["SMTP_TLS"]),
+            ("METRICS_TOKEN", len(app.config.get("METRICS_TOKEN", "")) < 32),
+            ("OUTBOX_KEY", (
+                app.config.get("OUTBOX_KEY") == "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE="
+            )),
+        )
+        if unsafe
+    ]
+    if unsafe_settings:
         raise RuntimeError(
-            "Production requires HTTPS, secure cookies, verified database TLS, SMTP TLS, private keys, and no debug"
+            "Production requires HTTPS, secure cookies, verified database TLS, SMTP TLS, private keys, and no debug; "
+            f"invalid settings: {', '.join(unsafe_settings)}"
         )
 
 
@@ -82,18 +112,18 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
     database = make_url(database_url)
     if database.get_backend_name() == "postgresql":
         connection_options["connect_timeout"] = DATABASE_CONNECT_TIMEOUT_SECONDS
-        connection_options["options"] = (
-            f'{database.query.get("options", "")} -c statement_timeout=10000 -c lock_timeout=3000'
-        )
         pool_options = {"pool_size": 5, "max_overflow": 5, "pool_timeout": 3}
 
-    app.extensions["database"] = create_engine(
+    engine = create_engine(
         database_url,
         pool_pre_ping=True,
         hide_parameters=True,
         connect_args=connection_options,
         **pool_options
     )
+    if database.get_backend_name() == "postgresql":
+        event.listen(engine, "begin", set_database_transaction_timeouts)
+    app.extensions["database"] = engine
     app.register_blueprint(health)
     configure_errors(app)
     app.register_blueprint(accounts)

@@ -36,6 +36,8 @@ Provide these files under `GIVVI_SECRETS_DIR`:
 | `smtp_username` | SMTP username |
 | `smtp_password` | SMTP password |
 
+The application applies 10-second statement and 3-second lock timeouts within each database transaction. Applying them per transaction keeps the limits effective with transaction-pooled PostgreSQL endpoints such as Neon.
+
 Restrict the host directory and files to the deployment operator and Docker runtime. Never commit or print secret values. Generate an outbox key with the project's installed cryptography dependency, for example:
 
 ```bash
