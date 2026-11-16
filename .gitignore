@@ -151,6 +151,11 @@ activemq-data/
 .env
 .envrc
 .venv
+node_modules/
+frontend/test-results/
+frontend/playwright-report/
+.env.*
+!.env.example
 env/
 venv/
 ENV/
@@ -216,3 +221,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local settings
+.local/
+givvi_secrets/

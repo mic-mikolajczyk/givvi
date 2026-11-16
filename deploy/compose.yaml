@@ -1,0 +1,112 @@
+name: givvi-production
+
+x-runtime: &runtime
+  image: ${GIVVI_API_IMAGE:-givvi-api:local}
+  restart: unless-stopped
+  read_only: true
+  tmpfs:
+    - /tmp:size=64m,mode=1777
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  environment: &environment
+    GIVVI_ENVIRONMENT: production
+    GIVVI_APP_ORIGIN: https://${GIVVI_DOMAIN:?Set GIVVI_DOMAIN}
+    GIVVI_COOKIE_SECURE: "true"
+    GIVVI_DATABASE_URL_FILE: /run/secrets/database_url
+    GIVVI_OUTBOX_KEY_FILE: /run/secrets/outbox_key
+    GIVVI_METRICS_TOKEN_FILE: /run/secrets/metrics_token
+    GIVVI_SMTP_HOST: ${GIVVI_SMTP_HOST:?Set GIVVI_SMTP_HOST}
+    GIVVI_SMTP_PORT: ${GIVVI_SMTP_PORT:-587}
+    GIVVI_SMTP_FROM: ${GIVVI_SMTP_FROM:?Set GIVVI_SMTP_FROM}
+    GIVVI_SMTP_TLS: "true"
+    GIVVI_SMTP_USERNAME_FILE: /run/secrets/smtp_username
+    GIVVI_SMTP_PASSWORD_FILE: /run/secrets/smtp_password
+  secrets:
+    - database_url
+    - database_ca
+    - outbox_key
+    - metrics_token
+    - smtp_username
+    - smtp_password
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  api:
+    <<: *runtime
+    build:
+      context: ..
+      dockerfile: deploy/api.Dockerfile
+    expose: ["8000"]
+  worker:
+    <<: *runtime
+    command: ["flask", "--app", "givvi", "mail-worker", "--watch"]
+    healthcheck:
+      disable: true
+  migrate:
+    <<: *runtime
+    profiles: [tools]
+    restart: "no"
+    environment:
+      <<: *environment
+      GIVVI_DATABASE_URL_FILE: /run/secrets/migration_database_url
+    secrets:
+      - migration_database_url
+      - database_ca
+      - outbox_key
+      - metrics_token
+      - smtp_username
+      - smtp_password
+    command: ["flask", "--app", "givvi", "db-upgrade"]
+    healthcheck:
+      disable: true
+  web:
+    image: ${GIVVI_WEB_IMAGE:-givvi-web:local}
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+    environment:
+      GIVVI_DOMAIN: ${GIVVI_DOMAIN:?Set GIVVI_DOMAIN}
+    ports:
+      - "80:8080"
+      - "443:8443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+secrets:
+  database_url:
+    file: ${GIVVI_SECRETS_DIR:?Set GIVVI_SECRETS_DIR}/database_url
+  migration_database_url:
+    file: ${GIVVI_SECRETS_DIR}/migration_database_url
+  database_ca:
+    file: ${GIVVI_SECRETS_DIR}/database_ca
+  outbox_key:
+    file: ${GIVVI_SECRETS_DIR}/outbox_key
+  metrics_token:
+    file: ${GIVVI_SECRETS_DIR}/metrics_token
+  smtp_username:
+    file: ${GIVVI_SECRETS_DIR}/smtp_username
+  smtp_password:
+    file: ${GIVVI_SECRETS_DIR}/smtp_password
+
+volumes:
+  caddy_data:
+  caddy_config:
