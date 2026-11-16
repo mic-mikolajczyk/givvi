@@ -73,13 +73,14 @@ describe('event management views', () => {
     await wrapper.get('button').trigger('click')
     await wrapper.get('input[name="name"]').setValue('Winter exchange')
     await wrapper.get('input[name="exchange_date"]').setValue('2026-12-20')
-    await wrapper.get('input[name="time_zone"]').setValue('Europe/Warsaw')
+    expect(wrapper.find('input[name="exchange_time"]').exists()).toBe(false)
+    expect(wrapper.find('input[name="time_zone"]').exists()).toBe(false)
     await wrapper.get('form').trigger('submit')
     await flushPromises()
 
-    expect(request).toHaveBeenCalledWith('/events', expect.objectContaining({
-      name: 'Winter exchange', exchange_date: '2026-12-20', time_zone: 'Europe/Warsaw',
-    }))
+    expect(request).toHaveBeenCalledWith('/events', {
+      name: 'Winter exchange', exchange_date: '2026-12-20', location: null, description: null, currency: 'EUR', budget: null,
+    })
     expect(router.currentRoute.value.path).toBe('/events/event-1')
     expect(wrapper.text()).toContain('Winter exchange')
     wrapper.unmount()

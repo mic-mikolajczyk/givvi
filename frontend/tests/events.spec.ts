@@ -76,7 +76,6 @@ for (const language of ['en', 'pl'] as const) {
     await page.getByRole('button', { name: copy.create }).click()
     await page.locator('input[name="name"]').fill(`Winter exchange ${language}`)
     await page.locator('input[name="exchange_date"]').fill('2026-12-20')
-    await page.locator('input[name="time_zone"]').fill('Europe/Warsaw')
     await page.getByRole('button', { name: copy.save }).click()
     await expect(page.getByRole('heading', { name: `Winter exchange ${language}` })).toBeVisible()
 
@@ -116,7 +115,6 @@ for (const language of ['en', 'pl'] as const) {
     await page.getByRole('button', { name: copy.create }).click()
     await page.locator('input[name="name"]').fill('Winter exchange')
     await page.locator('input[name="exchange_date"]').fill('2026-12-20')
-    await page.locator('input[name="time_zone"]').fill('Europe/Warsaw')
     await page.getByRole('button', { name: copy.save }).click()
     await expect(page.getByRole('heading', { name: 'Winter exchange' })).toBeVisible()
     await page.locator('input[name="participant_name"]').fill('Morgan Lee')
@@ -173,7 +171,6 @@ for (const language of ['en', 'pl'] as const) {
     await page.getByRole('button', { name: copy.create }).click()
     await page.locator('input[name="name"]').fill(`Private draw ${language}`)
     await page.locator('input[name="exchange_date"]').fill('2026-12-20')
-    await page.locator('input[name="time_zone"]').fill('Europe/Warsaw')
     await page.getByRole('button', { name: copy.save }).click()
     await expect(page.getByRole('heading', { name: `Private draw ${language}` })).toBeVisible()
     const eventUrl = page.url()
@@ -295,7 +292,6 @@ for (const language of ['en', 'pl'] as const) {
     await page.getByRole('button', { name: copy.create }).click()
     await page.locator('input[name="name"]').fill(`Lifecycle event ${language}`)
     await page.locator('input[name="exchange_date"]').fill('2026-12-20')
-    await page.locator('input[name="time_zone"]').fill('Europe/Warsaw')
     await page.getByRole('button', { name: copy.save }).click()
     await expect(page.getByRole('heading', { name: `Lifecycle event ${language}` })).toBeVisible()
 
