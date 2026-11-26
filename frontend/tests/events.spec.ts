@@ -1,5 +1,29 @@
 import { randomUUID } from 'node:crypto'
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
+
+async function expectRosterLayout(page: Page) {
+  for (const width of [320, 390, 1280]) {
+    await page.setViewportSize({ width, height: 800 })
+    const layout = await page.locator('.roster-row').evaluate((row) => {
+      const name = row.querySelector('.roster-name')!.getBoundingClientRect()
+      const buttons = Array.from(row.querySelectorAll('button, a')).map((button) => button.getBoundingClientRect())
+      const bounds = row.getBoundingClientRect()
+      return {
+        nameRight: name.right,
+        firstButtonLeft: buttons[0].left,
+        lastButtonRight: buttons[buttons.length - 1].right,
+        rowRight: bounds.right,
+        rowPaddingRight: parseFloat(getComputedStyle(row).paddingRight),
+        buttonsCentered: buttons.every((button) => Math.abs(button.y + button.height / 2 - (bounds.y + bounds.height / 2)) < 1),
+        noPageOverflow: document.documentElement.scrollWidth <= window.innerWidth,
+      }
+    })
+    expect(layout.nameRight).toBeLessThanOrEqual(layout.firstButtonLeft)
+    expect(layout.rowRight - layout.lastButtonRight).toBeCloseTo(layout.rowPaddingRight, 0)
+    expect(layout.buttonsCentered).toBe(true)
+    expect(layout.noPageOverflow).toBe(true)
+  }
+}
 
 for (const language of ['en', 'pl'] as const) {
   test(`refreshes external claims without overwriting edited fields in ${language}`, async ({ browser, page, baseURL }) => {
@@ -16,7 +40,9 @@ for (const language of ['en', 'pl'] as const) {
       data: { name: 'Polling exchange', exchange_date: '2026-12-20', time_zone: 'UTC' }, headers,
     })
     const eventId = (await created.json()).event.id
-    const added = await page.request.post(`/api/events/${eventId}/participants`, { data: { name: 'Morgan' }, headers })
+    const added = await page.request.post(`/api/events/${eventId}/participants`, {
+      data: { name: 'Morgan-Very-Long-Participant-Name' }, headers,
+    })
     const participantId = (await added.json()).participant.id
     const invitation = await page.request.post(`/api/events/${eventId}/invite-link`, { data: {}, headers })
     const token = new URLSearchParams(new URL((await invitation.json()).link).hash.slice(1)).get('token')
@@ -24,6 +50,10 @@ for (const language of ['en', 'pl'] as const) {
     await page.goto(`/events/${eventId}`)
     await expect(page.getByRole('heading', { name: 'Polling exchange' })).toBeVisible()
     await expect(page.locator('.claim-state')).toHaveText(language === 'en' ? 'Not claimed' : 'Niepotwierdzony')
+    await expect(page.getByRole('img', { name: language === 'en' ? 'Not claimed' : 'Niepotwierdzony' })).toBeVisible()
+    const unclaimedFill = await page.locator('.claim-state svg').evaluate((badge) => getComputedStyle(badge).fill)
+    expect(unclaimedFill).not.toBe('none')
+    await expectRosterLayout(page)
 
     const member = await browser.newContext({ baseURL: origin })
     try {
@@ -39,6 +69,11 @@ for (const language of ['en', 'pl'] as const) {
       expect(claimed.status()).toBe(200)
       await page.clock.fastForward(15000)
       await expect(page.locator('.claim-state')).toHaveText(language === 'en' ? 'Claimed' : 'Potwierdzono udział')
+      await expect(page.getByRole('img', { name: language === 'en' ? 'Claimed' : 'Potwierdzono udział' })).toBeVisible()
+      const claimedFill = await page.locator('.claim-state svg').evaluate((badge) => getComputedStyle(badge).fill)
+      expect(claimedFill).not.toBe('none')
+      expect(claimedFill).not.toBe(unclaimedFill)
+      await expectRosterLayout(page)
       await page.getByRole('button', { name: language === 'en' ? 'Edit event' : 'Edytuj wydarzenie', exact: true }).click()
       await page.locator('input[name="name"]').fill('Unsaved draft')
       const changed = await page.request.patch(`/api/events/${eventId}`, { data: { name: 'External update' }, headers })

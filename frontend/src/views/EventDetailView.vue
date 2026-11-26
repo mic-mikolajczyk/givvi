@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {
-  Archive, ArrowLeft, Copy, Eye, Gift, Pencil, Plus, RotateCcw, Save, Shuffle, Trash2, Unlink, UserRound, X,
+  Archive, ArrowLeft, BadgeCheck, Copy, Eye, Gift, Pencil, Plus, RotateCcw, Save, Shuffle, Trash2, Unlink, UserRound, X,
 } from '@lucide/vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -662,8 +662,25 @@ usePolling(() => eventId.value, loadEvent, {
               </button>
             </template>
             <template v-else>
-              <span class="roster-name"><UserRound :size="18" aria-hidden="true" />{{ participant.name }}</span>
-              <span :class="['claim-state', participant.claimed ? 'is-claimed' : '']">{{ participant.claimed ? t('claimed') : t('notClaimed') }}</span>
+              <span class="roster-name">
+                <UserRound
+                  :size="18"
+                  aria-hidden="true"
+                />
+                <span
+                  :class="['claim-state', participant.claimed ? 'is-claimed' : '']"
+                  role="img"
+                  :aria-label="participant.claimed ? t('claimed') : t('notClaimed')"
+                  :title="participant.claimed ? t('claimed') : t('notClaimed')"
+                >
+                  <BadgeCheck
+                    :size="18"
+                    aria-hidden="true"
+                  />
+                  <span class="visually-hidden">{{ participant.claimed ? t('claimed') : t('notClaimed') }}</span>
+                </span>
+                <span class="roster-name-text">{{ participant.name }}</span>
+              </span>
               <RouterLink
                 v-if="event.is_participant && participant.claimed"
                 class="icon-button wishlist-participant-link"

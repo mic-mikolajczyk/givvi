@@ -513,6 +513,8 @@ h2 { color: var(--ink); font-weight: 700; letter-spacing: -.02em; }
 .roster-row:last-child { border-bottom: 0; }
 .roster-name { font-size: 13px; }
 .roster-name svg { color: #83938a; }
+.roster-name .claim-state svg { color: var(--muted); fill: #e4ebe7; }
+.roster-name .claim-state.is-claimed svg { color: #fff; fill: var(--accent); }
 .claim-state { color: var(--muted); font-size: 11px; }
 .claim-state.is-claimed { color: var(--accent); font-weight: 700; }
 .roster-empty { color: var(--muted); font-size: 13px; }
@@ -608,9 +610,7 @@ h2 { color: var(--ink); font-weight: 700; letter-spacing: -.02em; }
   .event-detail-view .section-heading:has(> button) .secondary-button { width: 100%; }
   .event-facts > div { grid-template-columns: minmax(0, 34%) minmax(0, 1fr); gap: 12px; }
   .roster-add-form { grid-template-columns: minmax(0, 1fr); }
-  .roster-row { flex-wrap: wrap; }
-  .roster-name { flex-basis: calc(100% - 56px); }
-  .claim-state { margin-left: 28px; }
+  .roster-row, .roster-name { gap: 4px; }
   .invite-link-row { flex-wrap: wrap; }
   .invite-link-row input { flex-basis: 100%; }
   .invitation-roster li { align-items: flex-start; flex-wrap: wrap; }
