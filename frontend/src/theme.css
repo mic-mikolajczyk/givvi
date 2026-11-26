@@ -498,7 +498,7 @@ h2 { color: var(--ink); font-weight: 700; letter-spacing: -.02em; }
 }
 
 .event-facts dt { color: var(--muted); font-size: 12px; }
-.event-facts dd { font-size: 20px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.event-facts dd { align-self: flex-end; margin-top: auto; font-size: 20px; font-weight: 700; line-height: 1.25; text-align: right; overflow-wrap: anywhere; }
 .event-lifecycle-section { margin-top: 18px; }
 .lifecycle-actions,
 .drawing-actions { gap: 9px; }
