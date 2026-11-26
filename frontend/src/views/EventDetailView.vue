@@ -524,7 +524,7 @@ usePolling(() => eventId.value, loadEvent, {
           class="invite-link-row"
         >
           <label
-            class="sr-only"
+            class="visually-hidden"
             :for="`invite-link-${event.id}`"
           >{{ t('shareInviteLink') }}</label>
           <input
@@ -684,7 +684,7 @@ usePolling(() => eventId.value, loadEvent, {
       <section class="roster-section">
         <div class="section-heading"><h2>{{ t('roster') }}</h2><span>{{ event.participants.length }}/100</span></div>
         <form v-if="event.is_admin && !readOnly" class="roster-add-form" @submit.prevent="addParticipant">
-          <label class="sr-only" for="participant-name">{{ t('participantName') }}</label>
+          <label class="visually-hidden" for="participant-name">{{ t('participantName') }}</label>
           <input id="participant-name" v-model="participantName" name="participant_name" maxlength="120" required :placeholder="t('participantName')">
           <button class="primary-button" type="submit"><Plus :size="18" aria-hidden="true" />{{ t('addToRoster') }}</button>
         </form>
@@ -692,7 +692,7 @@ usePolling(() => eventId.value, loadEvent, {
         <ul v-else class="roster-list">
           <li v-for="participant in event.participants" :key="participant.id" class="roster-row">
             <template v-if="editingParticipant === participant.id">
-              <label class="sr-only" :for="`rename-${participant.id}`">{{ t('participantName') }}</label>
+              <label class="visually-hidden" :for="`rename-${participant.id}`">{{ t('participantName') }}</label>
               <input :id="`rename-${participant.id}`" v-model="editingName" maxlength="120">
               <button class="icon-button" type="button" :aria-label="t('save')" :title="t('save')" @click="saveRename(participant)">
                 <Save :size="18" aria-hidden="true" />

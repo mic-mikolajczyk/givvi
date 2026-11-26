@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#147d64" />
+    <title>GIVVI · Bootstrap preview</title>
+    <link rel="stylesheet" href="/src/bootstrap-preview.css" />
+  </head>
+  <body class="preview-page">
+    <nav class="navbar preview-navbar">
+      <div class="container">
+        <a class="navbar-brand preview-brand" href="/" aria-label="GIVVI home">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M12 8v13M3 8h18v13H3zM2 4h20v4H2zM12 4c0-4-7-4-7 0 0 2 3 4 7 4m0-4c0-4 7-4 7 0 0 2-3 4-7 4" />
+            </svg>
+          </span>
+          <span>GIVVI</span>
+        </a>
+        <div class="preview-nav-links">
+          <a class="active" href="#events">Events</a>
+          <a href="#wishlist">Wishlist</a>
+          <a href="#profile">Profile</a>
+        </div>
+        <div class="preview-nav-actions">
+          <select class="form-select form-select-sm" aria-label="Language">
+            <option>English</option>
+            <option>Polski</option>
+          </select>
+          <a class="avatar" href="#profile" aria-label="Your profile">A</a>
+        </div>
+      </div>
+    </nav>
+
+    <main class="container preview-main">
+      <div class="preview-notice alert" role="note">
+        <span>This is a visual-only Bootstrap preview with sample data. Your app is unchanged.</span>
+        <a href="/">Back to GIVVI</a>
+      </div>
+
+      <section class="welcome-section" aria-labelledby="welcome-heading">
+        <div>
+          <p class="eyebrow">YOUR LITTLE CORNER OF JOY</p>
+          <h1 id="welcome-heading">Make giving feel easy.</h1>
+          <p class="welcome-copy">Bring your people together and make every exchange a little more special.</p>
+        </div>
+        <button class="btn btn-primary create-button" type="button">
+          <span aria-hidden="true">+</span>
+          Create an event
+        </button>
+      </section>
+
+      <section class="row g-3 summary-row" aria-label="Your activity">
+        <div class="col-12 col-sm-4">
+          <div class="card summary-card h-100">
+            <div class="card-body">
+              <span class="summary-icon upcoming-icon" aria-hidden="true">↗</span>
+              <div><p>Coming up</p><strong>2 events</strong></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 col-sm-4">
+          <div class="card summary-card h-100">
+            <div class="card-body">
+              <span class="summary-icon people-icon" aria-hidden="true">♡</span>
+              <div><p>People together</p><strong>12 participants</strong></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 col-sm-4">
+          <div class="card summary-card h-100">
+            <div class="card-body">
+              <span class="summary-icon wishlist-icon" aria-hidden="true">☆</span>
+              <div><p>Your wishlist</p><strong>4 lovely ideas</strong></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="row g-4 content-row">
+        <section class="col-12 col-lg-8" id="events" aria-labelledby="events-heading">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">THE GOOD THINGS</p>
+              <h2 id="events-heading">Your events</h2>
+            </div>
+            <a href="#all-events">See all <span aria-hidden="true">→</span></a>
+          </div>
+
+          <div class="card events-card">
+            <div class="list-group list-group-flush">
+              <a class="list-group-item list-group-item-action event-item" href="#winter-gathering">
+                <span class="event-date"><strong>18</strong><small>DEC</small></span>
+                <span class="event-info">
+                  <strong>Winter get-together</strong>
+                  <small>18 December 2026 · 6:00 PM</small>
+                  <small class="event-location">Warsaw · 8 participants</small>
+                </span>
+                <span class="badge rounded-pill status-badge">Upcoming</span>
+                <span class="event-arrow" aria-hidden="true">›</span>
+              </a>
+              <a class="list-group-item list-group-item-action event-item" href="#book-club">
+                <span class="event-date date-lilac"><strong>04</strong><small>JAN</small></span>
+                <span class="event-info">
+                  <strong>Book club secret swap</strong>
+                  <small>4 January 2027 · 4:30 PM</small>
+                  <small class="event-location">At Maya’s · 4 participants</small>
+                </span>
+                <span class="badge rounded-pill status-badge">Upcoming</span>
+                <span class="event-arrow" aria-hidden="true">›</span>
+              </a>
+              <a class="list-group-item list-group-item-action event-item" href="#office-draw">
+                <span class="event-date date-peach"><strong>12</strong><small>NOV</small></span>
+                <span class="event-info">
+                  <strong>Office little surprises</strong>
+                  <small>12 November 2026 · 12:00 PM</small>
+                  <small class="event-location">The studio · 6 participants</small>
+                </span>
+                <span class="badge rounded-pill completed-badge">Finished</span>
+                <span class="event-arrow" aria-hidden="true">›</span>
+              </a>
+            </div>
+          </div>
+        </section>
+
+        <aside class="col-12 col-lg-4" id="wishlist">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">A FEW IDEAS</p>
+              <h2>Your wishlist</h2>
+            </div>
+            <a href="#all-gifts" aria-label="See all wishlist ideas">See all <span aria-hidden="true">→</span></a>
+          </div>
+          <div class="card wishlist-card">
+            <div class="card-body">
+              <div class="gift-preview gift-mug" aria-hidden="true">☕</div>
+              <div class="gift-copy">
+                <strong>A cozy new mug</strong>
+                <small>Something for slow mornings</small>
+              </div>
+              <span class="gift-price">€18</span>
+            </div>
+            <div class="card-body">
+              <div class="gift-preview gift-book" aria-hidden="true">✦</div>
+              <div class="gift-copy">
+                <strong>A book to get lost in</strong>
+                <small>Surprise me with a good one</small>
+              </div>
+              <span class="gift-price">€24</span>
+            </div>
+            <a href="#add-gift" class="wishlist-add">+ Add a wishlist idea</a>
+          </div>
+
+          <div class="card note-card">
+            <div class="card-body">
+              <span class="note-sparkle" aria-hidden="true">✳</span>
+              <p><strong>A little reminder</strong><br />Good gifts don’t need to be big. They just need to feel like you.</p>
+            </div>
+          </div>
+        </aside>
+      </div>
+      <footer class="preview-footer">Made for sharing a little joy.</footer>
+    </main>
+
+    <nav class="mobile-navigation" aria-label="Main navigation">
+      <a class="active" href="#events"><span aria-hidden="true">⌂</span>Events</a>
+      <a href="#wishlist"><span aria-hidden="true">♡</span>Wishlist</a>
+      <a href="#profile"><span aria-hidden="true">○</span>Profile</a>
+    </nav>
+  </body>
+</html>

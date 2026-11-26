@@ -34,24 +34,31 @@ onUnmounted(() => activeRequest?.abort())
 <template>
   <div class="page-shell">
     <header class="page-header">
-      <a
-        class="wordmark"
-        href="/"
-        aria-label="GIVVI"
-      >
-        <Gift
-          :size="28"
-          aria-hidden="true"
-        />
-        <span>GIVVI</span>
-      </a>
-      <label class="language-control">
-        <span class="sr-only">{{ t('language') }}</span>
-        <select v-model="locale">
-          <option value="en">English</option>
-          <option value="pl">Polski</option>
-        </select>
-      </label>
+      <div class="page-header-inner container">
+        <a
+          class="wordmark"
+          href="/"
+          aria-label="GIVVI"
+        >
+          <span class="brand-mark">
+            <Gift
+              :size="22"
+              aria-hidden="true"
+            />
+          </span>
+          <span>GIVVI</span>
+        </a>
+        <label class="language-control">
+          <span class="visually-hidden">{{ t('language') }}</span>
+          <select
+            v-model="locale"
+            class="form-select form-select-sm"
+          >
+            <option value="en">English</option>
+            <option value="pl">Polski</option>
+          </select>
+        </label>
+      </div>
     </header>
     <main class="status-main">
       <h1>{{ t('statusTitle') }}</h1>
