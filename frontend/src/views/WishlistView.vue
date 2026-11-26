@@ -13,7 +13,7 @@ interface EventWishlistContext {
   gifts: GiftRecord[]
 }
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const route = useRoute()
 const gifts = ref<GiftRecord[]>([])
 const orderVersion = ref(0)
@@ -29,10 +29,16 @@ const eventId = computed(() => String(route.params.eventId || ''))
 const participantId = computed(() => String(route.params.participantId || ''))
 const participantView = computed(() => Boolean(eventId.value && participantId.value))
 const form = reactive({ name: '', description: '', price: '', currency: 'EUR' as 'EUR' | 'PLN', link: '' })
+const currencySelected = ref(false)
+
+function defaultCurrency(): 'EUR' | 'PLN' {
+  return locale.value === 'pl' ? 'PLN' : 'EUR'
+}
 
 function resetForm() {
-  Object.assign(form, { name: '', description: '', price: '', currency: 'EUR', link: '' })
+  Object.assign(form, { name: '', description: '', price: '', currency: defaultCurrency(), link: '' })
   editingGiftId.value = ''
+  currencySelected.value = false
 }
 
 async function loadWishlist(signal?: AbortSignal, isCurrent: () => boolean = () => true) {
@@ -83,7 +89,7 @@ function beginEdit(gift: GiftRecord) {
     name: gift.name,
     description: gift.description || '',
     price: gift.price || '',
-    currency: gift.currency || 'EUR',
+    currency: gift.currency || defaultCurrency(),
     link: gift.link || '',
   })
   editingGiftId.value = gift.id
@@ -180,6 +186,11 @@ watch([eventId, participantId], () => {
   resetForm()
   notice.value = ''
   error.value = ''
+})
+watch(locale, () => {
+  if (formOpen.value && !editingGiftId.value && !currencySelected.value) {
+    form.currency = defaultCurrency()
+  }
 })
 usePolling(() => `${eventId.value}/${participantId.value}`, async (signal, isCurrent) => {
   if (event.value?.id !== (eventId.value || undefined) || participant.value?.id !== (participantId.value || undefined)) {
@@ -296,6 +307,7 @@ usePolling(() => `${eventId.value}/${participantId.value}`, async (signal, isCur
                 v-model="form.currency"
                 name="gift_currency"
                 :disabled="!form.price"
+                @change="currencySelected = true"
               >
                 <option value="EUR">EUR</option><option value="PLN">PLN</option>
               </select>

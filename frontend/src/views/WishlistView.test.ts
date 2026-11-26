@@ -18,7 +18,7 @@ const { request, ApiError } = vi.hoisted(() => ({
 }))
 vi.mock('../api', () => ({ request, ApiError }))
 
-async function mountWishlist(path = '/wishlist') {
+async function mountWishlist(path = '/wishlist', i18n = createI18n({ legacy: false, locale: 'en', messages })) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -30,7 +30,7 @@ async function mountWishlist(path = '/wishlist') {
   await router.push(path)
   await router.isReady()
   const wrapper = mount({ template: '<RouterView />' }, {
-    global: { plugins: [router, createI18n({ legacy: false, locale: 'en', messages })] },
+    global: { plugins: [router, i18n] },
   })
   await flushPromises()
   return wrapper
@@ -65,6 +65,72 @@ describe('wishlist views', () => {
     expect(request.mock.calls.map(([path]) => path)).toEqual(['/wishlist', '/wishlist/gifts'])
     expect(wrapper.text()).toContain('A book')
     expect(wrapper.text()).toContain('Price unknown')
+    wrapper.unmount()
+  })
+
+  it.each([
+    ['en', 'EUR'],
+    ['pl', 'PLN'],
+  ])('defaults new gifts to the %s language currency', async (locale, currency) => {
+    request.mockImplementation((path: string) => {
+      if (path === '/wishlist') return Promise.resolve({ gifts: [], order_version: 0 })
+      if (path === '/wishlist/gifts') return Promise.resolve({
+        gift: { id: 'gift-1', name: 'Book', description: null, price: '10', currency, link: null, position: 0 },
+        order_version: 1,
+      })
+      return Promise.reject(new Error(`Unexpected request: ${path}`))
+    })
+    const i18n = createI18n({ legacy: false, locale, messages })
+    const wrapper = await mountWishlist('/wishlist', i18n)
+
+    await wrapper.get('button.add-gift-button').trigger('click')
+    await wrapper.get('input[name="gift_name"]').setValue('Book')
+    await wrapper.get('input[name="gift_price"]').setValue('10')
+    expect((wrapper.get('select[name="gift_currency"]').element as HTMLSelectElement).value).toBe(currency)
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(request).toHaveBeenCalledWith('/wishlist/gifts', expect.objectContaining({ price: 10, currency }))
+    wrapper.unmount()
+  })
+
+  it('updates the default when language changes without overriding a chosen currency', async () => {
+    request.mockResolvedValue({ gifts: [], order_version: 0 })
+    const i18n = createI18n({ legacy: false, locale: 'en', messages })
+    const wrapper = await mountWishlist('/wishlist', i18n)
+
+    await wrapper.get('button.add-gift-button').trigger('click')
+    await wrapper.get('input[name="gift_price"]').setValue('10')
+    i18n.global.locale.value = 'pl'
+    await flushPromises()
+    const select = wrapper.get('select[name="gift_currency"]')
+    expect((select.element as HTMLSelectElement).value).toBe('PLN')
+    await select.setValue('EUR')
+    i18n.global.locale.value = 'en'
+    await flushPromises()
+    i18n.global.locale.value = 'pl'
+    await flushPromises()
+    expect((select.element as HTMLSelectElement).value).toBe('EUR')
+    await wrapper.get('button.secondary-button').trigger('click')
+    await wrapper.get('button.add-gift-button').trigger('click')
+    expect((wrapper.get('select[name="gift_currency"]').element as HTMLSelectElement).value).toBe('PLN')
+    wrapper.unmount()
+  })
+
+  it('preserves the saved currency when editing a gift', async () => {
+    request.mockResolvedValue({
+      gifts: [{ id: 'gift-1', name: 'Book', description: null, price: '10.00', currency: 'EUR', link: null, position: 0 }],
+      order_version: 0,
+    })
+    const i18n = createI18n({ legacy: false, locale: 'pl', messages })
+    const wrapper = await mountWishlist('/wishlist', i18n)
+
+    await wrapper.get('button[aria-label^="Edytuj prezent"]').trigger('click')
+    i18n.global.locale.value = 'en'
+    await flushPromises()
+    i18n.global.locale.value = 'pl'
+    await flushPromises()
+    expect((wrapper.get('select[name="gift_currency"]').element as HTMLSelectElement).value).toBe('EUR')
     wrapper.unmount()
   })
 

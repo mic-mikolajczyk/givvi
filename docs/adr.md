@@ -108,7 +108,7 @@ Each record states context, decision/pattern, rationale and alternatives, implem
 
 ## ADR-009: Transactional Outbox and Email Adapter
 
-**Context:** Email-address changes, recovery, and invitations must survive email-provider outages without holding database locks. Signup must not depend on email delivery.
+**Context:** Email-address changes and recovery must survive email-provider outages without holding database locks. Signup must not depend on email delivery.
 
 **Decision/pattern:** Use the transactional outbox pattern and a small email-provider adapter. Store delivery intent with the business transaction; a separate worker sends committed messages.
 
@@ -248,11 +248,11 @@ Log request ID, route template, status, duration, operation, and opaque identifi
 
 **Decision:** Generate a random capability token, store its SHA-256 digest for validation, and store a Fernet-encrypted copy solely to return the active link to authorized event members. Put the token in the URL fragment, never its path or query. The browser stores it in tab-scoped session storage and removes it from the address bar before making API requests. Preview uses a rate-limited POST body and an allowlisted projection containing only roster names and availability. Claiming requires authentication, CSRF, an existing unclaimed entry, and the active link token.
 
-**Claim and email behavior:** Serialize claims, corrections, and roster mutations on the event row, retaining the database uniqueness constraint as defense in depth. Claim correction releases the mistaken claim; the participant can then claim the intended available entry. The admin alone can queue invitation emails. Email locale uses a known account preference or English fallback, and delivery remains in the encrypted transactional outbox. The worker discards queued invitations whose link has since been revoked or regenerated; an undelivered email payload expires after 30 days, while a delivered link remains valid until event state blocks it or the admin revokes/regenerates it.
+**Claim and sharing behavior:** Serialize claims, corrections, and roster mutations on the event row, retaining the database uniqueness constraint as defense in depth. Claim correction releases the mistaken claim; the participant can then claim the intended available entry. Invitations are link-only; the email invitation UI, API endpoint, and queue producer have been removed. The worker discards legacy queued invitation emails without invalidating shared links. Links remain valid until event state blocks them or the admin revokes/regenerates them.
 
 **Rationale/alternatives:** Digest-only storage would prevent members from retrieving the still-active link for sharing. Plaintext storage would make a database read sufficient to impersonate an invite holder. Keeping the digest authoritative and encrypting the recoverable copy under the existing managed outbox key provides validation and controlled sharing without adding a new secret-management subsystem. A token in query/path risks access-log and referrer disclosure; a fragment is not sent in HTTP requests. Email matching does not establish membership; the recipient must still sign in and explicitly claim.
 
-**Verification:** Assert the preview schema excludes event details and account data, invalidated tokens stop working and stop queued delivery, only admins can send/revoke, and members can retrieve the active link. Use PostgreSQL races to verify one winner for competing claims, at most one entry per account, and serialization against roster removal. Browser tests cover fragment scrubbing, login/registration continuation, claim conflicts, and the authorized event transition.
+**Verification:** Assert the preview schema excludes event details and account data, invalidated tokens stop working, only admins can regenerate/revoke, and members can retrieve the active link. Verify the removed email endpoint returns 404 and the worker discards legacy invitation emails while preserving account emails. Use PostgreSQL races to verify one winner for competing claims, at most one entry per account, and serialization against roster removal. Browser tests cover fragment scrubbing, login/registration continuation, claim conflicts, and the authorized event transition.
 
 ## ADR-020: Wishlist Ordering and Event-Scoped Viewing
 

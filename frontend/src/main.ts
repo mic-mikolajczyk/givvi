@@ -1,10 +1,13 @@
 import { createApp, nextTick, watch } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
 
+import 'bootstrap/dist/css/bootstrap.min.css'
+
 import App from './App.vue'
 import { ApiError, refreshUser, safeReturnTo } from './api'
 import { i18n } from './i18n'
 import './style.css'
+import './theme.css'
 import StatusView from './views/StatusView.vue'
 import AccountShell from './views/AccountShell.vue'
 import AuthView from './views/AuthView.vue'

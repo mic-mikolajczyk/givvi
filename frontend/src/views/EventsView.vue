@@ -19,8 +19,7 @@ const totalEvents = ref(0)
 const pageSize = 50
 const totalPages = computed(() => Math.max(1, Math.ceil(totalEvents.value / pageSize)))
 const form = reactive({
-  name: '', exchange_date: '', exchange_time: '', time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-  location: '', description: '', currency: 'EUR' as 'EUR' | 'PLN', budget: '',
+  name: '', exchange_date: '', location: '', description: '', currency: 'EUR' as 'EUR' | 'PLN', budget: '',
 })
 
 const periods = computed(() => ['upcoming', 'ongoing', 'past'] as const)
@@ -63,7 +62,6 @@ async function createEvent() {
   try {
     const payload = await request<{ event: EventRecord }>('/events', {
       ...form,
-      exchange_time: form.exchange_time || null,
       location: form.location || null,
       description: form.description || null,
       budget: form.budget || null,
@@ -117,14 +115,6 @@ usePolling(() => String(page.value), loadEvents, { paused: () => saving.value })
         <label>
           <span>{{ t('exchangeDate') }}</span>
           <input v-model="form.exchange_date" name="exchange_date" type="date" required>
-        </label>
-        <label>
-          <span>{{ t('exchangeTime') }}</span>
-          <input v-model="form.exchange_time" name="exchange_time" type="time">
-        </label>
-        <label>
-          <span>{{ t('timeZone') }}</span>
-          <input v-model="form.time_zone" name="time_zone" maxlength="64" required>
         </label>
         <label>
           <span>{{ t('currency') }}</span>

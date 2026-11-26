@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {
-  Archive, ArrowLeft, Copy, Eye, Gift, Mail, Pencil, Plus, RotateCcw, Save, Shuffle, Trash2, Unlink, UserRound, X,
+  Archive, ArrowLeft, BadgeCheck, Copy, Eye, Gift, Pencil, Plus, RotateCcw, Save, Shuffle, Trash2, Unlink, UserRound, X,
 } from '@lucide/vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -24,7 +24,6 @@ const editingDetails = ref(false)
 const error = ref('')
 const notice = ref('')
 const participantName = ref('')
-const inviteEmail = ref('')
 const inviteLink = ref('')
 const editingParticipant = ref('')
 const editingName = ref('')
@@ -328,17 +327,6 @@ async function copyInviteLink() {
   }
 }
 
-async function sendInvitation() {
-  try {
-    await request(`/events/${eventId.value}/invitations`, { email: inviteEmail.value })
-    inviteEmail.value = ''
-    notice.value = 'invitation_queued'
-    error.value = ''
-  } catch (failure) {
-    error.value = failure instanceof ApiError ? failure.code : 'service_unavailable'
-  }
-}
-
 async function releaseClaim(participant: EventParticipant) {
   if (!window.confirm(t('confirmReleaseClaim'))) return
   try {
@@ -387,13 +375,32 @@ usePolling(() => eventId.value, loadEvent, {
     </p>
     <template v-else-if="event">
       <div class="view-heading event-detail-heading">
-        <div>
+        <div class="event-heading-main">
           <p class="eyebrow">
             {{ t('eventDetails') }}
           </p>
-          <h1 tabindex="-1">
-            {{ event.name }}
-          </h1>
+          <div class="event-title-row">
+            <h1 tabindex="-1">
+              {{ event.name }}
+            </h1>
+            <button
+              v-if="event.is_admin && !readOnly"
+              class="icon-button edit-event-button"
+              type="button"
+              :aria-label="t(editingDetails ? 'cancel' : 'editEvent')"
+              :title="t(editingDetails ? 'cancel' : 'editEvent')"
+              :disabled="saving"
+              @click="editingDetails ? cancelEdit() : beginEdit()"
+            >
+              <Pencil
+                :size="18"
+                aria-hidden="true"
+              />
+            </button>
+          </div>
+          <p class="event-description">
+            {{ event.description || t('notSet') }}
+          </p>
         </div>
         <div class="event-statuses">
           <span
@@ -426,19 +433,35 @@ usePolling(() => eventId.value, loadEvent, {
       </p>
 
       <section v-if="!editingDetails" class="event-form detail-summary">
-        <div class="section-heading">
-          <h2>{{ t('eventDetails') }}</h2>
-          <button v-if="event.is_admin && !readOnly" class="secondary-button edit-event-button" type="button" @click="beginEdit">
-            <Pencil :size="18" aria-hidden="true" />{{ t('editEvent') }}
-          </button>
-        </div>
         <dl class="event-facts">
           <div><dt>{{ t('exchangeDate') }}</dt><dd>{{ formatDate(event.exchange_date) }}</dd></div>
           <div><dt>{{ t('budget') }}</dt><dd>{{ event.budget ? `${event.budget} ${event.currency}` : `${t('notSet')} (${event.currency})` }}</dd></div>
           <div><dt>{{ t('location') }}</dt><dd>{{ event.location || t('notSet') }}</dd></div>
-          <div><dt>{{ t('description') }}</dt><dd>{{ event.description || t('notSet') }}</dd></div>
         </dl>
       </section>
+
+      <form v-if="editingDetails" class="event-form detail-form" @submit.prevent="saveEvent">
+        <div class="section-heading"><h2>{{ t('editEvent') }}</h2></div>
+        <fieldset :disabled="saving">
+          <label><span>{{ t('eventName') }}</span><input v-model="form.name" name="name" maxlength="120" required></label>
+          <div class="event-form-grid">
+            <label><span>{{ t('exchangeDate') }}</span><input v-model="form.exchange_date" name="exchange_date" type="date" required></label>
+            <label>
+              <span>{{ t('currency') }}</span>
+              <select v-model="form.currency" name="currency"><option value="EUR">EUR</option><option value="PLN">PLN</option></select>
+            </label>
+            <label><span>{{ t('budget') }}</span><input v-model="form.budget" name="budget" type="number" min="0" max="999999.99" step="0.01"></label>
+            <label><span>{{ t('location') }}</span><input v-model="form.location" name="location" maxlength="255"></label>
+          </div>
+          <label><span>{{ t('description') }}</span><textarea v-model="form.description" name="description" maxlength="2000" rows="3" /></label>
+          <div class="form-actions">
+            <button class="primary-button" type="submit">
+              <Save :size="18" aria-hidden="true" />{{ saving ? t('working') : t('saveEvent') }}
+            </button>
+            <button class="secondary-button cancel-edit-button" type="button" @click="cancelEdit">{{ t('cancel') }}</button>
+          </div>
+        </fieldset>
+      </form>
 
       <section v-if="event.is_admin" class="event-lifecycle-section">
         <div class="section-heading"><h2>{{ t('eventManagement') }}</h2></div>
@@ -478,29 +501,6 @@ usePolling(() => eventId.value, loadEvent, {
         </div>
       </section>
 
-      <form v-if="editingDetails" class="event-form detail-form" @submit.prevent="saveEvent">
-        <div class="section-heading"><h2>{{ t('editEvent') }}</h2></div>
-        <fieldset :disabled="saving">
-          <label><span>{{ t('eventName') }}</span><input v-model="form.name" name="name" maxlength="120" required></label>
-          <div class="event-form-grid">
-            <label><span>{{ t('exchangeDate') }}</span><input v-model="form.exchange_date" name="exchange_date" type="date" required></label>
-            <label>
-              <span>{{ t('currency') }}</span>
-              <select v-model="form.currency" name="currency"><option value="EUR">EUR</option><option value="PLN">PLN</option></select>
-            </label>
-            <label><span>{{ t('budget') }}</span><input v-model="form.budget" name="budget" type="number" min="0" max="999999.99" step="0.01"></label>
-            <label><span>{{ t('location') }}</span><input v-model="form.location" name="location" maxlength="255"></label>
-          </div>
-          <label><span>{{ t('description') }}</span><textarea v-model="form.description" name="description" maxlength="2000" rows="3" /></label>
-          <div class="form-actions">
-            <button class="primary-button" type="submit">
-              <Save :size="18" aria-hidden="true" />{{ saving ? t('working') : t('saveEvent') }}
-            </button>
-            <button class="secondary-button cancel-edit-button" type="button" @click="cancelEdit">{{ t('cancel') }}</button>
-          </div>
-        </fieldset>
-      </form>
-
       <section
         v-if="!readOnly"
         class="invitation-section"
@@ -524,7 +524,7 @@ usePolling(() => eventId.value, loadEvent, {
           class="invite-link-row"
         >
           <label
-            class="sr-only"
+            class="visually-hidden"
             :for="`invite-link-${event.id}`"
           >{{ t('shareInviteLink') }}</label>
           <input
@@ -558,34 +558,6 @@ usePolling(() => eventId.value, loadEvent, {
             />
           </button>
         </div>
-        <form
-          v-if="event.is_admin"
-          class="invitation-email-form"
-          @submit.prevent="sendInvitation"
-        >
-          <label :for="`invite-email-${event.id}`">{{ t('inviteByEmail') }}</label>
-          <div class="invite-link-row">
-            <input
-              :id="`invite-email-${event.id}`"
-              v-model="inviteEmail"
-              type="email"
-              name="invite_email"
-              maxlength="254"
-              autocomplete="email"
-              required
-              :placeholder="t('invitationEmail')"
-            >
-            <button
-              class="primary-button"
-              type="submit"
-            >
-              <Mail
-                :size="18"
-                aria-hidden="true"
-              />{{ t('sendInvitation') }}
-            </button>
-          </div>
-        </form>
       </section>
 
       <section
@@ -684,7 +656,7 @@ usePolling(() => eventId.value, loadEvent, {
       <section class="roster-section">
         <div class="section-heading"><h2>{{ t('roster') }}</h2><span>{{ event.participants.length }}/100</span></div>
         <form v-if="event.is_admin && !readOnly" class="roster-add-form" @submit.prevent="addParticipant">
-          <label class="sr-only" for="participant-name">{{ t('participantName') }}</label>
+          <label class="visually-hidden" for="participant-name">{{ t('participantName') }}</label>
           <input id="participant-name" v-model="participantName" name="participant_name" maxlength="120" required :placeholder="t('participantName')">
           <button class="primary-button" type="submit"><Plus :size="18" aria-hidden="true" />{{ t('addToRoster') }}</button>
         </form>
@@ -692,7 +664,7 @@ usePolling(() => eventId.value, loadEvent, {
         <ul v-else class="roster-list">
           <li v-for="participant in event.participants" :key="participant.id" class="roster-row">
             <template v-if="editingParticipant === participant.id">
-              <label class="sr-only" :for="`rename-${participant.id}`">{{ t('participantName') }}</label>
+              <label class="visually-hidden" :for="`rename-${participant.id}`">{{ t('participantName') }}</label>
               <input :id="`rename-${participant.id}`" v-model="editingName" maxlength="120">
               <button class="icon-button" type="button" :aria-label="t('save')" :title="t('save')" @click="saveRename(participant)">
                 <Save :size="18" aria-hidden="true" />
@@ -702,8 +674,25 @@ usePolling(() => eventId.value, loadEvent, {
               </button>
             </template>
             <template v-else>
-              <span class="roster-name"><UserRound :size="18" aria-hidden="true" />{{ participant.name }}</span>
-              <span :class="['claim-state', participant.claimed ? 'is-claimed' : '']">{{ participant.claimed ? t('claimed') : t('notClaimed') }}</span>
+              <span class="roster-name">
+                <UserRound
+                  :size="18"
+                  aria-hidden="true"
+                />
+                <span
+                  :class="['claim-state', participant.claimed ? 'is-claimed' : '']"
+                  role="img"
+                  :aria-label="participant.claimed ? t('claimed') : t('notClaimed')"
+                  :title="participant.claimed ? t('claimed') : t('notClaimed')"
+                >
+                  <BadgeCheck
+                    :size="18"
+                    aria-hidden="true"
+                  />
+                  <span class="visually-hidden">{{ participant.claimed ? t('claimed') : t('notClaimed') }}</span>
+                </span>
+                <span class="roster-name-text">{{ participant.name }}</span>
+              </span>
               <RouterLink
                 v-if="event.is_participant && participant.claimed"
                 class="icon-button wishlist-participant-link"

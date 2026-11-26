@@ -268,21 +268,6 @@ def revoke_invite_link(event_id: str) -> Response:
         return jsonify(code="invite_link_revoked")
 
 
-@events.post("/<event_id>/invitations")
-def send_invitation(event_id: str) -> tuple[Response, int]:
-    with Session(current_app.extensions["database"]) as database, database.begin():
-        require_csrf(database)
-        user = require_user(database)
-        event = get_admin_event(database, event_id, user.id, lock=True)
-        services.require_writable(event)
-        email = request_body().get("email")
-        throttle("event_invitation", str(email).casefold() if isinstance(email, str) else "")
-        if not event.invite_token_hash:
-            services.rotate_invite_token(event)
-        services.queue_invitation_email(database, event, email)
-        return jsonify(code="invitation_queued"), 202
-
-
 @events.post("/<event_id>/invitation-preview")
 def preview_invitation(event_id: str) -> Response:
     with Session(current_app.extensions["database"]) as database, database.begin():

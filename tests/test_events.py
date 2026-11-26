@@ -1,5 +1,6 @@
 from datetime import date
 from datetime import datetime
+from datetime import timedelta
 from datetime import timezone
 import json
 from urllib.parse import parse_qs
@@ -532,7 +533,7 @@ def test_claim_grants_membership_and_admin_can_release_a_mistaken_claim(account_
     denied_email = post(member, account_app, member_csrf, f"/api/events/{event_id}/invitations", {
         "email": "other@example.com",
     })
-    assert denied_email.status_code == 403
+    assert denied_email.status_code == 404
     duplicate_claim = post(member, account_app, member_csrf, f"/api/events/{event_id}/claim", {
         "participant_id": second.json["participant"]["id"], "token": token,
     })
@@ -890,81 +891,45 @@ def test_claim_is_rejected_when_event_becomes_read_only(account_app, read_only_s
     assert claim.json["code"] == "event_read_only"
 
 
-def test_invitation_email_uses_known_recipient_language_and_active_outbox(account_app) -> None:
+def test_email_invitation_endpoint_is_removed_without_queuing_mail(account_app) -> None:
     admin = account_app.test_client()
-    admin_csrf = register(admin, account_app, "mail-admin@example.com")
-    event_id = create_event(admin, account_app, admin_csrf, "Polish exchange").json["event"]["id"]
-    recipient = account_app.test_client()
-    register(recipient, account_app, "ola@example.com", "Ola", "pl")
-
-    queued = post(admin, account_app, admin_csrf, f"/api/events/{event_id}/invitations", {
-        "email": "ola@example.com",
-    })
-    with Session(account_app.extensions["database"]) as database:
-        message = database.query(EmailMessage).one()
-        payload = json.loads(Fernet(account_app.config["OUTBOX_KEY"].encode()).decrypt(message.payload.encode()))
-
-    sent = []
-    delivered = deliver_pending(account_app, sent.append)
-
-    assert queued.status_code == 202
-    assert payload["to"] == "ola@example.com"
-    assert payload["subject"] == "Zaproszenie GIVVI: Polish exchange"
-    assert "/invite/" in payload["body"]
-    assert delivered == 1
-    assert sent == [payload]
-
-
-def test_worker_discards_queued_invitation_after_link_revocation(account_app) -> None:
-    admin = account_app.test_client()
-    csrf = register(admin, account_app, "stale-mail-admin@example.com")
+    csrf = register(admin, account_app, "mail-admin@example.com")
     event_id = create_event(admin, account_app, csrf).json["event"]["id"]
-    queued = post(admin, account_app, csrf, f"/api/events/{event_id}/invitations", {
+
+    response = post(admin, account_app, csrf, f"/api/events/{event_id}/invitations", {
         "email": "guest@example.com",
     })
-    revoked = admin.delete(f"/api/events/{event_id}/invite-link", headers={
-        "X-CSRF-Token": csrf, "Origin": account_app.config["APP_ORIGIN"],
-    })
+
+    assert response.status_code == 404
+    with Session(account_app.extensions["database"]) as database:
+        assert database.scalar(select(EmailMessage)) is None
+        assert database.get(Event, event_id).invite_token_hash is None
+
+
+def test_worker_discards_legacy_invitation_without_invalidating_share_link(account_app) -> None:
+    admin = account_app.test_client()
+    csrf = register(admin, account_app, "legacy-mail-admin@example.com")
+    event_id = create_event(admin, account_app, csrf).json["event"]["id"]
+    link = post(admin, account_app, csrf, f"/api/events/{event_id}/invite-link", {}).json["link"]
+    payload = json.dumps({"to": "guest@example.com", "subject": "GIVVI invitation", "body": f"Join us:\n{link}"})
+    instant = account_app.config["CLOCK"]()
+    with Session(account_app.extensions["database"]) as database, database.begin():
+        database.add(EmailMessage(
+            event_id=event_id,
+            payload=Fernet(account_app.config["OUTBOX_KEY"].encode()).encrypt(payload.encode()).decode(),
+            available_at=instant,
+            expires_at=instant + timedelta(days=1),
+        ))
     sent = []
 
     delivered = deliver_pending(account_app, sent.append)
 
+    assert delivered == 0
+    assert sent == []
     with Session(account_app.extensions["database"]) as database:
         message = database.scalar(select(EmailMessage))
         assert message.payload is None
         assert message.failed_at is not None
-    assert queued.status_code == 202
-    assert revoked.status_code == 200
-    assert delivered == 0
-    assert sent == []
-
-
-def test_worker_discards_queued_invitation_after_event_is_archived(account_app) -> None:
-    admin = account_app.test_client()
-    csrf = register(admin, account_app, "archived-mail-admin@example.com")
-    event_id = create_event(admin, account_app, csrf).json["event"]["id"]
-    post(admin, account_app, csrf, f"/api/events/{event_id}/invitations", {"email": "guest@example.com"})
-    with Session(account_app.extensions["database"]) as database, database.begin():
-        database.get(Event, event_id).archived = True
-    sent = []
-
-    delivered = deliver_pending(account_app, sent.append)
-
-    assert delivered == 0
-    assert sent == []
-
-
-def test_invitation_email_uses_english_when_recipient_language_is_unknown(account_app) -> None:
-    admin = account_app.test_client()
-    csrf = register(admin, account_app, "fallback-mail-admin@example.com")
-    event_id = create_event(admin, account_app, csrf, "Winter exchange").json["event"]["id"]
-
-    queued = post(admin, account_app, csrf, f"/api/events/{event_id}/invitations", {
-        "email": "unknown@example.com",
-    })
-
-    with Session(account_app.extensions["database"]) as database:
-        message = database.scalar(select(EmailMessage))
-        payload = json.loads(Fernet(account_app.config["OUTBOX_KEY"].encode()).decrypt(message.payload.encode()))
-    assert queued.status_code == 202
-    assert payload["subject"] == "GIVVI invitation: Winter exchange"
+    assert admin.get(f"/api/events/{event_id}/invite-link").json["link"] == link
+    token = parse_qs(urlsplit(link).fragment)["token"][0]
+    assert admin.post(f"/api/events/{event_id}/invitation-preview", json={"token": token}).status_code == 200

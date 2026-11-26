@@ -119,7 +119,7 @@ Screenshots and failure traces are written under the ignored frontend test-resul
 
 ## Phase 3 Review
 
-1. As an event admin, prepare several roster entries, create an invitation link, and send an email invitation. Confirm the email uses the recipient's language when known and English otherwise.
+1. As an event admin, prepare several roster entries, create an invitation link, and share it. Invitations are link-only; there is no email invitation form or API endpoint. Previously queued invitation emails are discarded by the worker without invalidating shared links.
 2. Open the invite link in a signed-out browser. Before signing in, it should show only roster names and availability; the token should disappear from the address bar and remain usable through registration or login.
 3. Claim an available roster name. The browser should open the event only after the claim succeeds; another account cannot claim the same entry, and one account cannot claim a second entry.
 4. As an accepted participant, copy the active invitation link. As the admin, regenerate or revoke it and confirm the old link no longer previews or claims.
