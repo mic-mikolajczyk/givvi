@@ -119,6 +119,8 @@ for (const language of ['en', 'pl'] as const) {
     await expect(page.getByRole('heading', { name: 'Winter exchange' })).toBeVisible()
     await page.locator('input[name="participant_name"]').fill('Morgan Lee')
     await page.getByRole('button', { name: copy.add }).click()
+    await expect(page.locator('.invitation-section input[type="email"]')).toHaveCount(0)
+    await expect(page.locator('form.invitation-email-form')).toHaveCount(0)
     await page.getByRole('button', { name: copy.createLink }).click()
 
     const invitationLink = await page.locator('input[readonly]').inputValue()

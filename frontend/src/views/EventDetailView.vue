@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {
-  Archive, ArrowLeft, Copy, Eye, Gift, Mail, Pencil, Plus, RotateCcw, Save, Shuffle, Trash2, Unlink, UserRound, X,
+  Archive, ArrowLeft, Copy, Eye, Gift, Pencil, Plus, RotateCcw, Save, Shuffle, Trash2, Unlink, UserRound, X,
 } from '@lucide/vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -24,7 +24,6 @@ const editingDetails = ref(false)
 const error = ref('')
 const notice = ref('')
 const participantName = ref('')
-const inviteEmail = ref('')
 const inviteLink = ref('')
 const editingParticipant = ref('')
 const editingName = ref('')
@@ -328,17 +327,6 @@ async function copyInviteLink() {
   }
 }
 
-async function sendInvitation() {
-  try {
-    await request(`/events/${eventId.value}/invitations`, { email: inviteEmail.value })
-    inviteEmail.value = ''
-    notice.value = 'invitation_queued'
-    error.value = ''
-  } catch (failure) {
-    error.value = failure instanceof ApiError ? failure.code : 'service_unavailable'
-  }
-}
-
 async function releaseClaim(participant: EventParticipant) {
   if (!window.confirm(t('confirmReleaseClaim'))) return
   try {
@@ -558,34 +546,6 @@ usePolling(() => eventId.value, loadEvent, {
             />
           </button>
         </div>
-        <form
-          v-if="event.is_admin"
-          class="invitation-email-form"
-          @submit.prevent="sendInvitation"
-        >
-          <label :for="`invite-email-${event.id}`">{{ t('inviteByEmail') }}</label>
-          <div class="invite-link-row">
-            <input
-              :id="`invite-email-${event.id}`"
-              v-model="inviteEmail"
-              type="email"
-              name="invite_email"
-              maxlength="254"
-              autocomplete="email"
-              required
-              :placeholder="t('invitationEmail')"
-            >
-            <button
-              class="primary-button"
-              type="submit"
-            >
-              <Mail
-                :size="18"
-                aria-hidden="true"
-              />{{ t('sendInvitation') }}
-            </button>
-          </div>
-        </form>
       </section>
 
       <section

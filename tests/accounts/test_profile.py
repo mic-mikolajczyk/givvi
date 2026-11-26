@@ -86,9 +86,6 @@ def test_account_deletion_requires_reauthentication_and_cancels_admin_events(
         participant = client.post(f"/api/events/{event_id}/participants", json={"name": f"Member {index}"},
                                   headers=headers)
         assert participant.status_code == 201
-    invitation = client.post(f"/api/events/{event_id}/invitations", json={"email": "unregistered@example.com"},
-                             headers=headers)
-    assert invitation.status_code == 202
     drawing = client.post(f"/api/events/{event_id}/drawing", json={}, headers=headers)
     assert drawing.status_code == 200
 

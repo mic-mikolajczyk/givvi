@@ -95,8 +95,6 @@ h1 { font-size: 24px; font-weight: 700; margin: 0 0 24px; }
 .event-detail-view .primary-button svg, .event-detail-view .secondary-button svg { flex-shrink: 0; }
 .event-detail-view .section-heading:has(> button) { flex-direction: column; align-items: stretch; }
 .event-detail-view .lifecycle-actions, .event-detail-view .drawing-actions, .event-detail-view .form-actions { flex-direction: column; align-items: stretch; gap: 12px; }
-.event-detail-view .invitation-email-form .invite-link-row { flex-direction: column; align-items: stretch; }
-.event-detail-view .invitation-email-form .invite-link-row input { flex-basis: auto; width: 100%; }
 .invitation-section { margin-top: 32px; padding: 22px 0; border-block: 1px solid var(--border); }
 .drawing-section { margin-top: 32px; padding: 22px 0; border-bottom: 1px solid var(--border); }
 .event-lifecycle-section { margin-top: 32px; padding: 22px 0; border-block: 1px solid var(--border); }
@@ -110,7 +108,6 @@ h1 { font-size: 24px; font-weight: 700; margin: 0 0 24px; }
 .recipient-reveal strong { font-size: 20px; overflow-wrap: anywhere; }
 @keyframes recipient-reveal { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .recipient-reveal { animation: none; } }
-.invitation-email-form { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
 .invite-link-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .invite-link-row input { flex: 1; min-width: 0; min-height: 46px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 4px; background: #fff; font: inherit; }
 .invite-link-row input[readonly] { color: #58655f; }

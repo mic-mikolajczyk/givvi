@@ -20,7 +20,7 @@ This app should organize participants into events, assign Secret Santa, and mana
 0. User registration and login
 1. User creates an event and becomes the event admin.
 2. Event admin creates a participants list for the event. This is not an invitation list; it simply defines who will be part of the Secret Santa exchange.
-3. Admin can send the invitation to other users by email or through the app.
+3. Admin shares an invitation link with other users; accepted participants can share the active link too.
 4. Users are entering the event and accepting their participation. They need to confirm who they are from the participants list.
 5. If Admin user enables drawing, participants can view their assigned recipients.
 6. Participants can see on the event page the list of participants, event details, link to each participant wishlist and gift exchange status.

@@ -1,10 +1,8 @@
 from datetime import date
 from datetime import datetime
 from datetime import time
-from datetime import timedelta
 from decimal import Decimal
 from decimal import InvalidOperation
-import json
 import secrets
 from zoneinfo import ZoneInfo
 from zoneinfo import ZoneInfoNotFoundError
@@ -21,7 +19,6 @@ from sqlalchemy.orm import Session
 from givvi.accounts.security import digest
 from givvi.accounts.security import now
 from givvi.accounts.security import throttle
-from givvi.accounts.services import normalized_email
 from givvi.errors import ApiError
 from givvi.models import EmailMessage
 from givvi.models import Event
@@ -32,7 +29,6 @@ from givvi.models import User
 
 MAX_ROSTER_ENTRIES = 100
 MAX_EVENT_BUDGET = Decimal("999999.99")
-INVITATION_EMAIL_RETENTION_DAYS = 30
 MAX_DRAW_ATTEMPTS = 1000
 
 
@@ -414,28 +410,6 @@ def release_claim(database: Session, event: Event, participant_id: str) -> None:
     if participant.user_id is None:
         raise ApiError("participant_not_claimed", 409)
     participant.user_id = None
-
-
-def queue_invitation_email(database: Session, event: Event, email_value: object) -> None:
-    email = normalized_email(email_value)
-    recipient = database.scalar(select(User).where(User.email == email))
-    language = recipient.language if recipient else "en"
-    templates = {
-        "en": (f"GIVVI invitation: {event.name}", f"You are invited to join {event.name}. Claim your place:\n"),
-        "pl": (f"Zaproszenie GIVVI: {event.name}", f"Zapraszamy do udziału w wydarzeniu {event.name}. Zajmij miejsce:\n"),
-    }
-    subject, introduction = templates[language]
-    token = invite_token(event)
-    link = invitation_link(event, token)
-    payload = json.dumps({"to": email, "subject": subject, "body": f"{introduction}\n{link}"}, ensure_ascii=False)
-    encrypted = Fernet(current_app.config["OUTBOX_KEY"].encode()).encrypt(payload.encode()).decode()
-    database.add(EmailMessage(
-        user_id=recipient.id if recipient else None,
-        event_id=event.id,
-        payload=encrypted,
-        available_at=now(),
-        expires_at=now() + timedelta(days=INVITATION_EMAIL_RETENTION_DAYS),
-    ))
 
 
 def ensure_valid_local_time(exchange_date: date, exchange_time: time | None, time_zone: str) -> None:

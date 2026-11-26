@@ -92,7 +92,7 @@ An account may claim at most one roster entry in an event, and a roster entry ma
 
 - The admin creates roster entries before inviting participants. Roster names are event-specific and do not need to match account names.
 - Only the admin can create, rename, or remove roster entries. Roster editing is allowed only while drawing is disabled.
-- The admin can send event invitations by email.
+- Event invitations use shareable links only; the app does not send invitation emails.
 - Any accepted participant can share the active event link. The admin can revoke or regenerate that link.
 - The link requires registration or login. It lets a user claim an existing unclaimed roster entry; it does not create roster entries.
 - Users select an unclaimed roster entry themselves. Claims do not require admin approval.
@@ -143,9 +143,8 @@ An account may claim at most one roster entry in an event, and a roster entry ma
 
 ## 10. Notifications and Updates
 
-- V1 sends transactional email for email-address changes, password reset, and event invitations. Registration sends no email.
-- The admin may send event invitations by email; accepted participants may invite others by sharing the event link.
-- Email invitations are localized using the recipient's selected language, falling back to English.
+- V1 sends transactional email for email-address changes and password reset. Registration sends no email.
+- The admin and accepted participants invite others by sharing the active event link.
 - The event dashboard communicates pending states such as unclaimed roster entries and unrevealed assignments.
 - Changes are reflected through periodic refresh/polling and normal page navigation. Full real-time push updates are not required.
 
@@ -172,7 +171,7 @@ An account may claim at most one roster entry in an event, and a roster entry ma
 ## 13. Acceptance Criteria
 
 - A user can register and reach the dashboard already signed in, without receiving or opening a verification email. They can subsequently sign in, reset their password, manage their profile, and confirm email-address changes.
-- A user can create an event with the required name and date, add roster entries, and share or email invitations.
+- A user can create an event with the required name and date, add roster entries, and share invitation links.
 - Invitees can sign in or register, claim unique roster entries, and access only events they belong to.
 - The admin cannot enable drawing with fewer than three roster entries. Claim status does not affect eligibility, and unclaimed entries remain part of the assignment.
 - A valid draw assigns every participant exactly one other participant, with no self-assignment or duplicate recipient.

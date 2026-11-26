@@ -465,7 +465,7 @@ describe('event management views', () => {
     wrapper.unmount()
   })
 
-  it('lets the admin send invitations, share the link, and release a mistaken claim', async () => {
+  it('lets the admin share only the invitation link and release a mistaken claim', async () => {
     const claimedEvent = {
       ...event,
       participants: [{ id: 'participant-1', name: 'Morgan', claimed: true }],
@@ -474,7 +474,6 @@ describe('event management views', () => {
     request.mockImplementation((path: string, body?: object, _retryCsrf?: boolean, method?: string) => {
       if (path === '/events/event-1' && !body) return Promise.resolve({ event: claimedEvent })
       if (path === '/events/event-1/invite-link' && !body) return Promise.resolve({ link: activeLink })
-      if (path === '/events/event-1/invitations') return Promise.resolve({ code: 'invitation_queued' })
       if (path.endsWith('/participants/participant-1/claim') && method === 'DELETE') {
         return Promise.resolve({ code: 'claim_released' })
       }
@@ -494,13 +493,12 @@ describe('event management views', () => {
     await flushPromises()
 
     expect((wrapper.get('input[readonly]').element as HTMLInputElement).value).toBe(activeLink)
-    await wrapper.get('input[name="invite_email"]').setValue('guest@example.com')
-    await wrapper.get('form.invitation-email-form').trigger('submit')
-    await flushPromises()
+    expect(wrapper.find('input[type="email"]').exists()).toBe(false)
+    expect(wrapper.find('form.invitation-email-form').exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="Copy invitation link"]').exists()).toBe(true)
     await wrapper.get('button[aria-label="Release mistaken claim Morgan"]').trigger('click')
     await flushPromises()
 
-    expect(request).toHaveBeenCalledWith('/events/event-1/invitations', { email: 'guest@example.com' })
     expect(request).toHaveBeenCalledWith('/events/event-1/participants/participant-1/claim', {}, true, 'DELETE')
     expect(wrapper.text()).toContain('Not claimed')
     wrapper.unmount()
