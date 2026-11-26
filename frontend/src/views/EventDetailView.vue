@@ -375,13 +375,32 @@ usePolling(() => eventId.value, loadEvent, {
     </p>
     <template v-else-if="event">
       <div class="view-heading event-detail-heading">
-        <div>
+        <div class="event-heading-main">
           <p class="eyebrow">
             {{ t('eventDetails') }}
           </p>
-          <h1 tabindex="-1">
-            {{ event.name }}
-          </h1>
+          <div class="event-title-row">
+            <h1 tabindex="-1">
+              {{ event.name }}
+            </h1>
+            <button
+              v-if="event.is_admin && !readOnly"
+              class="icon-button edit-event-button"
+              type="button"
+              :aria-label="t(editingDetails ? 'cancel' : 'editEvent')"
+              :title="t(editingDetails ? 'cancel' : 'editEvent')"
+              :disabled="saving"
+              @click="editingDetails ? cancelEdit() : beginEdit()"
+            >
+              <Pencil
+                :size="18"
+                aria-hidden="true"
+              />
+            </button>
+          </div>
+          <p class="event-description">
+            {{ event.description || t('notSet') }}
+          </p>
         </div>
         <div class="event-statuses">
           <span
@@ -414,19 +433,35 @@ usePolling(() => eventId.value, loadEvent, {
       </p>
 
       <section v-if="!editingDetails" class="event-form detail-summary">
-        <div class="section-heading">
-          <h2>{{ t('eventDetails') }}</h2>
-          <button v-if="event.is_admin && !readOnly" class="secondary-button edit-event-button" type="button" @click="beginEdit">
-            <Pencil :size="18" aria-hidden="true" />{{ t('editEvent') }}
-          </button>
-        </div>
         <dl class="event-facts">
           <div><dt>{{ t('exchangeDate') }}</dt><dd>{{ formatDate(event.exchange_date) }}</dd></div>
           <div><dt>{{ t('budget') }}</dt><dd>{{ event.budget ? `${event.budget} ${event.currency}` : `${t('notSet')} (${event.currency})` }}</dd></div>
           <div><dt>{{ t('location') }}</dt><dd>{{ event.location || t('notSet') }}</dd></div>
-          <div><dt>{{ t('description') }}</dt><dd>{{ event.description || t('notSet') }}</dd></div>
         </dl>
       </section>
+
+      <form v-if="editingDetails" class="event-form detail-form" @submit.prevent="saveEvent">
+        <div class="section-heading"><h2>{{ t('editEvent') }}</h2></div>
+        <fieldset :disabled="saving">
+          <label><span>{{ t('eventName') }}</span><input v-model="form.name" name="name" maxlength="120" required></label>
+          <div class="event-form-grid">
+            <label><span>{{ t('exchangeDate') }}</span><input v-model="form.exchange_date" name="exchange_date" type="date" required></label>
+            <label>
+              <span>{{ t('currency') }}</span>
+              <select v-model="form.currency" name="currency"><option value="EUR">EUR</option><option value="PLN">PLN</option></select>
+            </label>
+            <label><span>{{ t('budget') }}</span><input v-model="form.budget" name="budget" type="number" min="0" max="999999.99" step="0.01"></label>
+            <label><span>{{ t('location') }}</span><input v-model="form.location" name="location" maxlength="255"></label>
+          </div>
+          <label><span>{{ t('description') }}</span><textarea v-model="form.description" name="description" maxlength="2000" rows="3" /></label>
+          <div class="form-actions">
+            <button class="primary-button" type="submit">
+              <Save :size="18" aria-hidden="true" />{{ saving ? t('working') : t('saveEvent') }}
+            </button>
+            <button class="secondary-button cancel-edit-button" type="button" @click="cancelEdit">{{ t('cancel') }}</button>
+          </div>
+        </fieldset>
+      </form>
 
       <section v-if="event.is_admin" class="event-lifecycle-section">
         <div class="section-heading"><h2>{{ t('eventManagement') }}</h2></div>
@@ -465,29 +500,6 @@ usePolling(() => eventId.value, loadEvent, {
           ><Trash2 :size="18" aria-hidden="true" />{{ t('deleteEvent') }}</button>
         </div>
       </section>
-
-      <form v-if="editingDetails" class="event-form detail-form" @submit.prevent="saveEvent">
-        <div class="section-heading"><h2>{{ t('editEvent') }}</h2></div>
-        <fieldset :disabled="saving">
-          <label><span>{{ t('eventName') }}</span><input v-model="form.name" name="name" maxlength="120" required></label>
-          <div class="event-form-grid">
-            <label><span>{{ t('exchangeDate') }}</span><input v-model="form.exchange_date" name="exchange_date" type="date" required></label>
-            <label>
-              <span>{{ t('currency') }}</span>
-              <select v-model="form.currency" name="currency"><option value="EUR">EUR</option><option value="PLN">PLN</option></select>
-            </label>
-            <label><span>{{ t('budget') }}</span><input v-model="form.budget" name="budget" type="number" min="0" max="999999.99" step="0.01"></label>
-            <label><span>{{ t('location') }}</span><input v-model="form.location" name="location" maxlength="255"></label>
-          </div>
-          <label><span>{{ t('description') }}</span><textarea v-model="form.description" name="description" maxlength="2000" rows="3" /></label>
-          <div class="form-actions">
-            <button class="primary-button" type="submit">
-              <Save :size="18" aria-hidden="true" />{{ saving ? t('working') : t('saveEvent') }}
-            </button>
-            <button class="secondary-button cancel-edit-button" type="button" @click="cancelEdit">{{ t('cancel') }}</button>
-          </div>
-        </fieldset>
-      </form>
 
       <section
         v-if="!readOnly"

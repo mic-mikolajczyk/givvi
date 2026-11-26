@@ -326,7 +326,13 @@ describe('event management views', () => {
 
     await wrapper.get('button.edit-event-button').trigger('click')
     await wrapper.get('input[name="name"]').setValue('Unsaved name')
-    await wrapper.get('button.cancel-edit-button').trigger('click')
+    const viewChildren = Array.from(wrapper.get('.event-detail-view').element.children)
+    expect(viewChildren.indexOf(wrapper.get('.detail-form').element))
+      .toBeLessThan(viewChildren.indexOf(wrapper.get('.event-lifecycle-section').element))
+
+    await wrapper.get('button.edit-event-button').trigger('click')
+    expect(wrapper.find('.detail-form').exists()).toBe(false)
+    expect(wrapper.find('.detail-summary').exists()).toBe(true)
     await wrapper.get('button.edit-event-button').trigger('click')
 
     expect((wrapper.get('input[name="name"]').element as HTMLInputElement).value).toBe('Winter exchange')
