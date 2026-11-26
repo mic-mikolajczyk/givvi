@@ -418,7 +418,7 @@ describe('event management views', () => {
     })
     await flushPromises()
 
-    await wrapper.get('button').trigger('click')
+    await wrapper.get('.primary-button').trigger('click')
     await flushPromises()
 
     expect(request).toHaveBeenCalledWith('/events/event-1/claim', {

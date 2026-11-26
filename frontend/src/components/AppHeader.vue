@@ -4,12 +4,12 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { ApiError, currentUser, request, type User } from '../api'
+import LanguageSwitch from './LanguageSwitch.vue'
 
 const { t, locale } = useI18n()
 const error = ref('')
 
-async function changeLanguage(event: Event) {
-  const language = (event.target as HTMLSelectElement).value as 'en' | 'pl'
+async function changeLanguage(language: 'en' | 'pl') {
   locale.value = language
   localStorage.setItem('givvi-language', language)
   if (currentUser.value) {
@@ -65,17 +65,13 @@ async function changeLanguage(event: Event) {
         </RouterLink>
       </nav>
       <div class="header-actions">
-        <label class="language-control">
-          <span class="visually-hidden">{{ t('language') }}</span>
-          <select
-            :value="locale"
-            class="form-select form-select-sm"
-            @change="changeLanguage"
-          >
-            <option value="en">English</option>
-            <option value="pl">Polski</option>
-          </select>
-        </label>
+        <div class="language-control">
+          <LanguageSwitch
+            :model-value="locale === 'en' ? 'en' : 'pl'"
+            :label="t('language')"
+            @update:model-value="changeLanguage"
+          />
+        </div>
         <p
           v-if="error"
           class="header-error"

@@ -35,7 +35,7 @@ describe('service status', () => {
     await flushPromises()
     expect(wrapper.get('[role="status"]').text()).toContain('Unavailable')
 
-    await wrapper.get('button').trigger('click')
+    await wrapper.get('.icon-button').trigger('click')
     await flushPromises()
 
     expect(wrapper.get('[role="status"]').text()).toContain('Connected')
@@ -67,9 +67,13 @@ describe('service status', () => {
     await flushPromises()
     expect(wrapper.get('[role="status"]').text()).toContain('Połączono')
 
-    await wrapper.get('select').setValue('en')
+    const languageSwitch = wrapper.get('.language-switch')
+    expect(languageSwitch.attributes('aria-checked')).toBe('false')
+    await languageSwitch.trigger('click')
 
     expect(wrapper.get('[role="status"]').text()).toContain('Connected')
+    expect(wrapper.get('.language-switch').attributes('aria-checked')).toBe('true')
+    expect(localStorage.getItem('givvi-language')).toBe('en')
     wrapper.unmount()
   })
 })

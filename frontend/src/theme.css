@@ -104,7 +104,39 @@ button, select, a { -webkit-tap-highlight-color: transparent; }
 }
 
 .language-control { margin: 0; }
-.language-control select { width: 112px; max-width: 130px; min-height: 38px; border-color: var(--border); border-radius: 8px; color: var(--muted); font-size: 13px; }
+.language-switch {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  width: 76px;
+  height: 38px;
+  grid-template-columns: repeat(2, 1fr);
+  align-items: center;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #e9f4ef;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+.language-switch::before {
+  position: absolute;
+  z-index: -1;
+  inset-block: 3px;
+  inset-inline-start: 3px;
+  width: calc(50% - 3px);
+  border-radius: inherit;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(34 51 46 / 16%);
+  content: "";
+  transition: transform .18s ease;
+}
+.language-switch[aria-checked="true"]::before { transform: translateX(100%); }
+.language-switch span { text-align: center; }
+.language-switch .is-active { color: var(--accent-dark); }
 .header-error { max-width: 230px; margin: 0; color: var(--danger); font-size: 12px; }
 
 .status-main {
@@ -536,8 +568,6 @@ h2 { color: var(--ink); font-weight: 700; letter-spacing: -.02em; }
   .brand-mark { width: 32px; height: 32px; }
   .desktop-navigation { display: none; }
   .header-actions { gap: 8px; }
-  .language-control select { width: 100px; min-height: 36px; }
-
   .account-main {
     margin-top: 27px;
     padding: 0 16px 98px;
